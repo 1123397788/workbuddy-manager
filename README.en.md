@@ -8,6 +8,11 @@ A web frontend for [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api
 bulk account onboarding via QR code, automatic daily check-in, API key distribution,
 IP access control, request logs and usage stats — all in one panel.
 
+> The upstream repository has been unavailable since 2026-09-23 (deleted by its
+> author); this project continues under the upstream MIT licence. Existing
+> deployments are unaffected — for reinstall/migration, see the
+> [deployment guide](deploy/README.md#〇上游仓库已不可访问2026-09-23-起).
+
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
@@ -33,7 +38,7 @@ Published and discussed in the [**LINUX DO**](https://linux.do) community — �
 
 ## What is this
 
-[`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api) wraps a Tencent CodeBuddy
+`workbuddy2api` (its original repository has been deleted by its author) wraps a Tencent CodeBuddy
 account pool into an OpenAI-compatible API (written in Go). Its capabilities are complete,
 but they are command-line only: adding an account means running a script, checking status
 means `curl /status`, and handing out API keys has no interface at all.
@@ -65,9 +70,9 @@ it makes a capable upstream gateway visible and manageable. The two fit together
 - **The upstream stays focused on its core**: the panel does not ask the upstream to change
   code for it, so the upstream can stay lean
 
-Contributions are welcome: upstream improvements go to
-[workbuddy2api](https://github.com/Sliverkiss/workbuddy2api), while panel-related issues and
-ideas belong in [this repository](https://github.com/ithtelab/workbuddy-manager/issues).
+Contributions are welcome: both panel and upstream-source issues and ideas belong in
+[this repository](https://github.com/ithtelab/workbuddy-manager/issues) — the original
+upstream repo is gone, and its source is now maintained here.
 
 ---
 
@@ -578,8 +583,10 @@ Two other differences from a host install (both surfaced in the UI):
 
 ### 4. Server deployment (one-click script)
 
-This project depends on the upstream [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api)
-(account pool and OpenAI-compatible API) — **cloning this repo alone will not run**.
+This project depends on the upstream workbuddy2api (account pool and OpenAI-compatible
+API) — **cloning this repo alone will not run**. Point `UPSTREAM_SRC` at a local copy
+(directory or archive): the original repository is gone, see the
+[deployment guide](deploy/README.md#〇上游仓库已不可访问2026-09-23-起).
 A one-click script installs both on a clean machine:
 
 ```bash
@@ -888,7 +895,8 @@ workbuddy-manager/
 
 > Please include the version and error logs, and **remove any keys or tokens first**.
 > For issues with the upstream workbuddy2api itself, use
-> [its repository](https://github.com/Sliverkiss/workbuddy2api).
+> [this repository](https://github.com/ithtelab/workbuddy-manager/issues) — the original
+> upstream repo is gone, and its source is now maintained here.
 
 ### Release process
 
@@ -943,7 +951,8 @@ release notes, and creates a Release with the archives attached.
 - [**linux-do/cdk**](https://github.com/linux-do/cdk) (MIT) — design tokens and floating
   dock component; this project's UI follows its visual language
 - [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) — the account
-  pool and OpenAI-compatible proxy underneath
+  pool and OpenAI-compatible proxy underneath (MIT; its repository became unavailable
+  on 2026-09-23, and this project continues maintaining the source)
 - [**lbjlaq/Antigravity-Manager**](https://github.com/lbjlaq/Antigravity-Manager) — feature
   reference for the console
 

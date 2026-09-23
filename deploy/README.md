@@ -1,11 +1,57 @@
 # 部署指南
 
-本项目管理端**依赖上游 [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api)**
-（提供账号池调度与 OpenAI 兼容接口）。单独 clone 本仓库是跑不起来的 ——
-为此我们提供了一键脚本，会在干净机器上自动安装好两者。
+本项目管理端**依赖上游 workbuddy2api**（提供账号池调度与 OpenAI 兼容接口）。
+单独 clone 本仓库是跑不起来的 —— 为此我们提供了一键脚本，会在干净机器上安装好两者。
 
 > **重要**：请勿把本项目管理端的数据目录与上游账号目录提交或公开分享，
 > 其中含账号授权凭据。
+
+---
+
+## 〇、上游仓库已不可访问（2026-09-23 起）
+
+上游原仓库 `github.com/Sliverkiss/workbuddy2api` 已删除，克隆地址失效。影响如下：
+
+| 场景 | 现在的状态 |
+|---|---|
+| **已经在跑**的部署 | **不受影响**。上游源码在你机器上、镜像也是本地构建的；面板的一键更新会沿用现有源码重建上游，面板自己照常更新 |
+| **新装** | 克隆那一步会失败 —— 改用下面的「自备源码」方式 |
+| **更新上游代码** | 原地址拿不到新代码了（上游已停更）。要改代码就改本地那份源码，或换成你自己的副本 |
+
+### 自备源码（三种方式，任选其一）
+
+```bash
+# 1) 复用已有的上游目录（最省事：机器上已经有 /opt/workbuddy2api）
+sudo UPSTREAM_SRC=/opt/workbuddy2api bash deploy/install.sh
+
+# 2) 用自己的副本（fork / 私有镜像 / 你保存的源码包）
+sudo UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git bash deploy/install.sh
+sudo UPSTREAM_SRC=/path/to/workbuddy2api-<版本>.tar.gz bash deploy/install.sh
+
+# 3) 上游已手工装好，只想装面板
+sudo bash deploy/install.sh --skip-upstream
+```
+
+`UPSTREAM_SRC` 支持三种形态：源码目录、`.tar.gz`、`.zip`（复制或解压到
+`UPSTREAM_DIR`，默认 `/opt/workbuddy2api`）。
+
+### 以后怎么更新上游代码
+
+上游已停更，没有 `git pull` 可拉。更新方式是**替换源码目录里的文件**再重建：
+
+```bash
+cd /opt/workbuddy2api && docker compose up -d --build     # 用当前源码重建
+# 换一份源码：把新源码覆盖到该目录（保留 config.json / auths / data）后再执行上面这条
+```
+
+这三样务必保留：`config.json`（含 `api_key`）、`auths/`（账号授权）、`data/`。
+面板的「更新上游」仍可用 —— 拉不到新代码时它会**如实说明原因并沿用现有源码**
+继续重建，不会把你的服务弄停。
+
+### 许可
+
+上游为 MIT 许可（版权归原作者）。继续使用、修改、再分发都需保留它的 `LICENSE`
+与版权声明 —— 源码目录里那份 `LICENSE` 不要删。
 
 ---
 
@@ -17,15 +63,15 @@ wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/work
 tar xzf workbuddy-manager-*.tar.gz
 cd workbuddy-manager-*
 
-# 2) 一键部署（会自动检测并安装上游 workbuddy2api）
+# 2) 一键部署（自动检测上游；上游源码用 UPSTREAM_SRC 指定，见上一节）
 sudo bash deploy/install.sh
 ```
 
 脚本会自动完成：
 
 1. 环境预检（Python ≥3.9、Docker、端口占用检查）
-2. **安装上游 workbuddy2api** —— 克隆、生成随机 `api_key`、设置目录属主、
-   构建并启动容器、等待就绪
+2. **安装上游 workbuddy2api** —— 取源码（本地目录或 git 地址）、生成随机 `api_key`、
+   设置目录属主、构建并启动容器、等待就绪
 3. 安装管理端 —— 部署代码、装依赖、注册 systemd 服务
 4. 验证两条链路并打印访问地址与初始密码
 

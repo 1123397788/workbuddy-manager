@@ -7,6 +7,10 @@
 一套给 [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api) 配套的 Web 管理端：
 扫码批量纳管账号、自动签到、密钥分发、IP 管控、调用日志与用量统计，一个面板全搞定。
 
+> 上游仓库自 2026-09-23 起已不可访问（作者删库，本项目按 MIT 继续运营）。
+> 已部署的不受影响；重装 / 迁移时怎么取得上游源码，见
+> [部署指南的开头一节](deploy/README.md#〇上游仓库已不可访问2026-09-23-起)。
+
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
@@ -32,7 +36,7 @@
 
 ## 这是什么
 
-[`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api) 是一个把腾讯 CodeBuddy 账号池包装成 OpenAI 兼容接口的反代服务（Go 编写）。它的能力很完整，但只有命令行：加账号要跑脚本、看状态要 `curl /status`、发密钥没有界面。
+`workbuddy2api` 是一个把腾讯 CodeBuddy 账号池包装成 OpenAI 兼容接口的反代服务（Go 编写，原仓库已被作者删除）。它的能力很完整，但只有命令行：加账号要跑脚本、看状态要 `curl /status`、发密钥没有界面。
 
 本项目补上这一块 —— 一个可以公网运营的 Web 控制台：
 
@@ -56,9 +60,9 @@
   一起把这个生态做得更好用
 - **上游专注自己的核心**：面板不要求上游为它改代码，让上游能保持精简
 
-欢迎参与共建：上游的改进建议提到
-[workbuddy2api](https://github.com/Sliverkiss/workbuddy2api)，面板相关的问题与想法
-提到[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)。
+欢迎参与共建：面板与上游源码的问题、想法都提到
+[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
+（上游原仓库已不可访问，相关源码现由本项目继续维护）。
 
 ---
 
@@ -489,9 +493,9 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 
 ### 四、部署到服务器（一键脚本）
 
-本项目依赖上游 [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api)
-（账号池与 OpenAI 兼容接口），**单独 clone 本仓库无法运行**。
-为此提供了一键脚本，会在干净机器上自动装好两者：
+本项目依赖上游 workbuddy2api（账号池与 OpenAI 兼容接口），**单独 clone 本仓库无法运行**。
+上游源码用 `UPSTREAM_SRC` 指定（本地目录或压缩包）——原仓库已不可访问，
+详见[部署指南](deploy/README.md#〇上游仓库已不可访问2026-09-23-起)。一键脚本会装好两者：
 
 ```bash
 # 推荐：用 Release 包（内含已构建的前端，无需 Node.js）
@@ -794,7 +798,8 @@ workbuddy-manager/
   [功能建议](https://github.com/ithtelab/workbuddy-manager/issues/new?template=feature_request.yml)
 
 > 反馈时请附上版本号与错误日志，并**先移除其中的密钥、Token 等敏感信息**。
-> 上游 workbuddy2api 自身的问题请在其[仓库](https://github.com/Sliverkiss/workbuddy2api)反馈。
+> 上游 workbuddy2api 自身的问题也提到[本仓库](https://github.com/ithtelab/workbuddy-manager/issues)
+> ——原仓库已不可访问，源码由本项目继续维护。
 
 ### 版本发布流程
 
@@ -843,7 +848,7 @@ CI 会构建前端、打包产物、从 CHANGELOG 提取对应版本段落作为
 
 - [**LINUX DO**](https://linux.do) —— 本项目的发布与交流社区
 - [**linux-do/cdk**](https://github.com/linux-do/cdk)（MIT）—— 界面设计令牌与浮动底栏组件来源，本项目 UI 视觉与其保持一致
-- [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) —— 底层账号池与 OpenAI 兼容代理
+- [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) —— 底层账号池与 OpenAI 兼容代理（MIT；原仓库已于 2026-09-23 不可访问，本项目继续维护其源码）
 - [**lbjlaq/Antigravity-Manager**](https://github.com/lbjlaq/Antigravity-Manager) —— 管理端功能形态参考
 
 ## License
