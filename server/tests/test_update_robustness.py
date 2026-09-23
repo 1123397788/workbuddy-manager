@@ -144,5 +144,49 @@ class UpstreamRefPinning(unittest.TestCase):
         self.assertEqual(updater.read_status().get('upstream_ref'), '98b5e160')
 
 
+class UpstreamRemoteGoneTest(unittest.TestCase):
+    """上游仓库没了的时候，更新日志要把原因说对。
+
+    背景：上游原仓库 Sliverkiss/workbuddy2api 自 2026-09-23 起已不可访问。
+    此前拉取失败一律写「git fetch 失败（网络问题？）」——用户会去查网络、
+    反复重试一个必然失败的地址。真正的原因与出路要写清楚：源码还在本地、
+    本次照常重建；以后要更新就指向自己的副本。
+
+    判据用**真实的 git 报文**：git 的原文是
+    `fatal: repository 'https://…' not found`（仓库地址夹在中间），
+    所以「repository…not found」不能写成连写匹配（头一版就栽在这，测试看得见）。
+    """
+
+    GONE = [
+        "remote: Repository not found.\nfatal: repository 'https://github.com/x/y.git/' not found",
+        "fatal: repository 'https://github.com/Sliverkiss/workbuddy2api.git/' not found",
+        'fatal: could not read from remote repository',
+        "fatal: 'https://example.com/x.git' does not appear to be a git repository",
+    ]
+    OTHER = [
+        'fatal: could not resolve host: github.com',
+        'fatal: unable to access ...: Connection timed out',
+        '',
+    ]
+
+    def test_repo_gone_is_named_as_such(self) -> None:
+        for out in self.GONE:
+            with self.subTest(out=out.splitlines()[0] if out else ''):
+                hint = worker._fetch_failed_hint(out)
+                self.assertIn('已不可访问', hint)
+                self.assertIn('WB_UPSTREAM_REPO', hint, '要给出可操作的出路')
+
+    def test_network_failure_is_not_blamed_on_the_missing_repo(self) -> None:
+        """网络、超时这类失败不能误报成「仓库已删除」——那会把排查带偏。"""
+        for out in self.OTHER:
+            with self.subTest(out=out):
+                hint = worker._fetch_failed_hint(out)
+                self.assertNotIn('已不可访问', hint)
+
+    def test_pinned_target_is_mentioned(self) -> None:
+        hint = worker._fetch_failed_hint(self.GONE[1], 'v1.2.3')
+        self.assertIn('v1.2.3', hint, '固定了版本时要说明是哪一次拉取失败')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -11,6 +11,11 @@
 #   sudo bash deploy/install.sh --skip-upstream  # 已自备 workbuddy2api
 #   sudo bash APP_DIR=/opt/custom bash deploy/install.sh
 #
+# 上游源码从哪来（二选一）：
+#   UPSTREAM_SRC=<本地目录或 tar.gz>   用本地那份源码，不联网克隆（推荐）
+#   UPSTREAM_REPO=<git 地址>           从 git 拉；原上游仓库已不可访问，
+#                                      需要指向你自己的副本（fork / 私有镜像）
+#
 # 说明：workbuddy2api 的账号登录（扫码）是交互式的，无法自动化；
 #       安装完成后通过本管理端的「添加账号」扫码即可。
 # ============================================================
@@ -19,7 +24,11 @@ set -euo pipefail
 # ── 可配置项（均可用环境变量覆盖）─────────────────────────
 APP_DIR="${APP_DIR:-/opt/workbuddy-manager}"
 UPSTREAM_DIR="${UPSTREAM_DIR:-/opt/workbuddy2api}"
+# 上游原仓库 Sliverkiss/workbuddy2api 自 2026-09-23 起已不可访问（404）。
+# 默认值保留原地址只为「已有副本的人不必改代码」；新装请用 UPSTREAM_SRC
+# 指向本地源码，或把 UPSTREAM_REPO 改成你自己的副本。
 UPSTREAM_REPO="${UPSTREAM_REPO:-https://github.com/Sliverkiss/workbuddy2api.git}"
+UPSTREAM_SRC="${UPSTREAM_SRC:-}"
 UPSTREAM_PORT="${UPSTREAM_PORT:-7863}"
 MANAGER_PORT="${MANAGER_PORT:-7864}"
 PY="${PY:-/usr/bin/python3}"
@@ -120,14 +129,58 @@ elif [ -f "${UPSTREAM_DIR}/config.json" ]; then
 else
   info "未检测到上游部署，开始安装到 ${UPSTREAM_DIR}"
 
-  command -v git >/dev/null 2>&1 || die "需要 git 来克隆上游仓库"
-
-  if [ -d "${UPSTREAM_DIR}/.git" ]; then
+  # 上游源码有两种来源。**优先本地源码**：原上游仓库自 2026-09-23 起已不可访问，
+  # 克隆这条路对多数人已经走不通，而本地那份源码（比如你已有的部署、或维护者
+  # 提供的源码包）本来就能直接构建。
+  if [ -n "$UPSTREAM_SRC" ]; then
+    [ -e "$UPSTREAM_SRC" ] || die "UPSTREAM_SRC 指向的路径不存在：${UPSTREAM_SRC}"
+    info "使用本地源码：${UPSTREAM_SRC}"
+    mkdir -p "$UPSTREAM_DIR"
+    if [ "$(cd "$UPSTREAM_SRC" 2>/dev/null && pwd -P)" = "$(cd "$UPSTREAM_DIR" && pwd -P)" ]; then
+      # 源码本来就在目标目录（典型情形：复用已有的 /opt/workbuddy2api）
+      info "源码已在 ${UPSTREAM_DIR}，无需复制"
+    else
+      case "$UPSTREAM_SRC" in
+        *.tar.gz | *.tgz)
+          tar -xzf "$UPSTREAM_SRC" -C "$UPSTREAM_DIR" --strip-components=1 ;;
+        *.zip)
+          command -v unzip >/dev/null 2>&1 || die "解压 .zip 需要 unzip，或改用 .tar.gz"
+          tmp="$(mktemp -d)"
+          unzip -q -o "$UPSTREAM_SRC" -d "$tmp"
+          # 压缩包里通常有一个顶层目录，把它**连同点文件**一起搬进去
+          inner="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -1)"
+          src="$tmp"
+          [ -n "$inner" ] && src="$inner"
+          cp -a "$src"/. "$UPSTREAM_DIR"/
+          rm -rf "$tmp" ;;
+        *)
+          [ -d "$UPSTREAM_SRC" ] || die "UPSTREAM_SRC 既不是目录也不是 .tar.gz/.zip：${UPSTREAM_SRC}"
+          cp -a "$UPSTREAM_SRC"/. "$UPSTREAM_DIR"/ ;;
+      esac
+    fi
+    [ -f "${UPSTREAM_DIR}/docker-compose.yml" ] || \
+      die "本地源码里没有 docker-compose.yml，确认 UPSTREAM_SRC 指的是上游根目录"
+  elif [ -d "${UPSTREAM_DIR}/.git" ]; then
     info "目录已存在，拉取最新代码"
     ( cd "$UPSTREAM_DIR" && git pull --ff-only ) || warn "git pull 失败，沿用现有代码"
   else
+    command -v git >/dev/null 2>&1 || die "需要 git 来克隆上游仓库（或改用 UPSTREAM_SRC 指定本地源码）"
     info "克隆 ${UPSTREAM_REPO}"
-    git clone --depth 1 "$UPSTREAM_REPO" "$UPSTREAM_DIR"
+    if ! git clone --depth 1 "$UPSTREAM_REPO" "$UPSTREAM_DIR"; then
+      die "克隆上游仓库失败。
+
+  上游原仓库（Sliverkiss/workbuddy2api）自 2026-09-23 起已不可访问，默认地址
+  已经克隆不下来。请改用下面任一方式后重跑：
+
+    # 1) 用本地那份源码（你已有部署时，就在 UPSTREAM_DIR，例如 /opt/workbuddy2api）
+    sudo UPSTREAM_SRC=/opt/workbuddy2api bash deploy/install.sh
+
+    # 2) 用你自己的副本（fork 或私有镜像）
+    sudo UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git bash deploy/install.sh
+
+    # 3) 已经手工装好上游，只是让本脚本跳过
+    sudo bash deploy/install.sh --skip-upstream"
+    fi
   fi
 
   cd "$UPSTREAM_DIR"

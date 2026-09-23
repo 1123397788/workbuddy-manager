@@ -890,3 +890,68 @@ class ForkImageWorkflowTest(unittest.TestCase):
         tags_block = tags_block[:tags_block.find('provenance')]
         self.assertNotIn('github.repository_owner', tags_block,
                          'tags 里直接用了 repository_owner（含大写）—— 应改用转小写后的输出')
+
+
+class UpstreamSourceFallbackTest(unittest.TestCase):
+    """上游仓库没了之后的安装路径（install.sh 的 UPSTREAM_SRC）。
+
+    上游原仓库（Sliverkiss/workbuddy2api）自 2026-09-23 起不可访问，克隆那一步对
+    新装用户是死的。脚本因此支持三种本地来源，并且**这是新用户第一次接触本项目
+    时会走的路径**，不能悄悄回归。
+
+    两条断言方式并用：
+      · 源码级：三种来源分支、同目录短路、失败提示的三条退路都在；
+      · 真跑一遍：解压那条分支的参数在真实目录上验证过 ——
+        GitHub 导出的包都带顶层目录，少了 `--strip-components=1` 会把文件散到
+        上一层，docker compose 找不到 Dockerfile（与 Dockerfile 分支的验法同款）。
+    """
+
+    def setUp(self) -> None:
+        self.sh = (_ROOT / 'deploy' / 'install.sh').read_text(encoding='utf-8')
+
+    def test_three_source_shapes_supported(self) -> None:
+        self.assertIn('UPSTREAM_SRC="${UPSTREAM_SRC:-}"', self.sh, '没有 UPSTREAM_SRC 开关')
+        for shape in ('*.tar.gz | *.tgz', '*.zip'):
+            self.assertIn(shape, self.sh, f'缺少 {shape} 分支')
+        self.assertIn('cp -a "$UPSTREAM_SRC"/. "$UPSTREAM_DIR"/', self.sh,
+                      '缺少「本地目录」分支')
+        # 这条必须**盯脚本本身**：下面那条真跑用例验的是「这样解压是对的」，
+        # 脚本里若是漏了这个参数，只跑自己的命令照样绿（第一版就漏在这）。
+        self.assertIn('tar -xzf "$UPSTREAM_SRC" -C "$UPSTREAM_DIR" --strip-components=1',
+                      self.sh, '解压分支少了 --strip-components=1（文件会散在上一层）')
+
+    def test_same_directory_is_short_circuited(self) -> None:
+        """源码本来就在目标目录时不要自己复制自己（复用 /opt/workbuddy2api 的典型情形）。"""
+        self.assertIn('pwd -P', self.sh, '没有做「同一目录」判断')
+
+    def test_clone_failure_lists_ways_out(self) -> None:
+        """克隆失败要把三条退路写清楚——否则用户只看到 git 的 not found。"""
+        block = self.sh[self.sh.find('克隆上游仓库失败'):]
+        block = block[:block.find('fi\n') + 3]
+        for hint in ('UPSTREAM_SRC=', 'UPSTREAM_REPO=', '--skip-upstream'):
+            self.assertIn(hint, block, f'失败提示里缺 {hint}')
+
+    def test_tar_strips_top_level_directory(self) -> None:
+        """真跑：把「带顶层目录的源码包」按脚本的方式解开，文件必须落在根上。"""
+        import shutil
+        import subprocess
+        if not shutil.which('tar'):
+            self.skipTest('本机没有 tar')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            src = root / 'pkg' / 'workbuddy2api-abc1234'
+            (src / 'scripts').mkdir(parents=True)
+            (src / 'docker-compose.yml').write_text('services: {}\n', encoding='utf-8')
+            (src / 'scripts' / 'x.py').write_text('', encoding='utf-8')
+            tarball = root / 'upstream.tar.gz'
+            subprocess.run(['tar', '-czf', str(tarball), '-C', str(root / 'pkg'),
+                            'workbuddy2api-abc1234'], check=True)
+            dest = root / 'dest'
+            dest.mkdir()
+            subprocess.run(['tar', '-xzf', str(tarball), '-C', str(dest),
+                            '--strip-components=1'], check=True)
+            self.assertTrue((dest / 'docker-compose.yml').is_file(),
+                            '解压后 docker-compose.yml 不在根目录 —— 少了 --strip-components=1？')
+            self.assertTrue((dest / 'scripts' / 'x.py').is_file(), '子目录内容也应在')
+            self.assertFalse((dest / 'workbuddy2api-abc1234').exists(),
+                             '顶层目录没被剥掉')

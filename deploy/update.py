@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import stat
@@ -358,6 +359,29 @@ def _compose_looks_customized(rep: Reporter) -> bool:
         return False
 
 
+def _fetch_failed_hint(out: str, pinned: str = '') -> str:
+    """拉取上游失败时给用户的话——分清「远端没了」与「网络/引用有问题」。
+
+    上游原仓库（Sliverkiss/workbuddy2api）自 2026-09-23 起已不可访问。
+    git 在这种情况下的报错是 `Repository not found` / `could not read from remote`，
+    直接透出去容易被当成网络抖动，用户会反复重试同一个必然失败的地址。
+    """
+    low = (out or '').lower()
+    # 注意别写成「repo**sitory** not found」这种连在一起的写法：git 的原文是
+    # `repository 'https://…' not found`，中间夹着地址，连写匹配不上（头一版就栽在这）。
+    gone = (re.search(r'repository .*not found', low) is not None
+            or 'does not appear to be a git repository' in low
+            or 'could not read from remote repository' in low)
+    target = f'上游 {pinned}' if pinned else '上游'
+    if gone:
+        return (f'{target}的远端仓库已不可访问（原仓库 Sliverkiss/workbuddy2api 已删除）。\n'
+                '  本地源码不受影响，本次沿用它继续。以后要更新上游代码，请指向你自己的副本：\n'
+                '    WB_UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git\n'
+                '  或直接手工更新源码目录（见 deploy/README.md 的「上游仓库已不可访问」）。')
+    return (f'{target}拉取失败（提交/标签是否存在？网络是否正常？）'
+            + (f'：{out.strip()[:200]}' if out.strip() else ''))
+
+
 def update_upstream(rep: Reporter) -> None:
     rep.step('更新上游 workbuddy2api')
 
@@ -413,7 +437,7 @@ def update_upstream(rep: Reporter) -> None:
             rep.log('按提交直接拉取失败，尝试完整拉取…', 'warn')
             rc, out = run(['git', 'fetch', 'origin'], cwd=UPSTREAM_DIR, rep=rep, check=False)
         if rc != 0:
-            raise RuntimeError(f'拉取上游 {pinned} 失败（提交/标签是否存在？网络是否正常？）')
+            raise RuntimeError(_fetch_failed_hint(out, pinned))
         rc, out = run(['git', 'reset', '--hard', 'FETCH_HEAD'], cwd=UPSTREAM_DIR, rep=rep, check=False)
         if rc != 0:
             rc, out = run(['git', 'reset', '--hard', pinned], cwd=UPSTREAM_DIR, rep=rep, check=False)
@@ -423,7 +447,10 @@ def update_upstream(rep: Reporter) -> None:
         rep.log('拉取上游最新代码…')
         rc, out = run(['git', 'fetch', '--depth', '1', 'origin'], cwd=UPSTREAM_DIR, rep=rep, check=False)
         if rc != 0:
-            rep.log('git fetch 失败（网络问题？）', 'warn')
+            # 拉不到不致命：下面会沿用现有代码继续重建容器（本地源码是好的）。
+            # 但**原因要如实说**——原先一律写「网络问题？」，而上游原仓库
+            # 2026-09-23 起已删除，用户照那句话去查网络只会白费功夫。
+            rep.log(_fetch_failed_hint(out), 'warn')
         branch = 'master'
         rc, out = run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=UPSTREAM_DIR, rep=rep, check=False)
         cur = out.strip() if rc == 0 else ''
