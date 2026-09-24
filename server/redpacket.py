@@ -82,18 +82,16 @@ def split_amount(total: float, shares: int, kind: str,
     后面的人拿到接近 0——那是 bug 不是惊喜。上限保证了**越往后越稳**，
     同时保留随机性（有人多有人少，但不会有人什么都拿不到）。
 
-    均分就是轮流发固定值，最后一份拿余数：浮点累加会有误差，
-    让最后一份兜底才能保证**总和精确等于 total**（否则界面上「合计」
-    与各份相加对不上，用户会以为少了）。
+    均分先换算成整数最小单位，再用商和余数分配；余数每份补一个单位，
+    保证每份为正、总额守恒，且各份最多相差一个最小单位。
     """
     unit = MIN_UNIT[kind]
     decimals = 2 if kind == KIND_CREDIT else 0
 
     if mode == MODE_EVEN:
-        each = round(total / shares, decimals)
-        out = [each] * (shares - 1)
-        out.append(round(total - each * (shares - 1), decimals))
-        return out
+        scale = 10 ** decimals
+        each, extra = divmod(round(total * scale), shares)
+        return [(each + (i < extra)) / scale for i in range(shares)]
 
     # 拼手气
     out: list[float] = []

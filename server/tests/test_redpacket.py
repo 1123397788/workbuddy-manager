@@ -75,10 +75,22 @@ class SplitTest(unittest.TestCase):
         self.assertGreater(len(results), 1, '三次分出来的完全相同——随机性没生效')
 
     def test_even_is_constant(self) -> None:
-        """均分就该每份一样（除了最后一份兜底的零头）。"""
+        """总额能整除时，均分每份一样。"""
         got = split_amount(100.0, 4, KIND_CREDIT, MODE_EVEN)
         self.assertEqual(got[:3], [25.0, 25.0, 25.0])
         self.assertEqual(round(sum(got), 2), 100.0)
+
+    def test_even_rounding_never_creates_unlimited_quota(self) -> None:
+        """舍入余数不能产生零或负额度（零额度会成为无限密钥）。"""
+        for kind, scale in [(KIND_TOKEN, 1), (KIND_CREDIT, 100)]:
+            for units, shares in [(12, 7), (16, 10), (7, 7), (12, 1)]:
+                with self.subTest(kind=kind, units=units, shares=shares):
+                    got = split_amount(units / scale, shares, kind, MODE_EVEN)
+                    amounts = [round(a * scale) for a in got]
+                    self.assertEqual(len(got), shares)
+                    self.assertTrue(all(a >= 1 for a in amounts))
+                    self.assertEqual(sum(amounts), units)
+                    self.assertLessEqual(max(amounts) - min(amounts), 1)
 
     def test_single_share_gets_everything(self) -> None:
         """一份的红包 = 全部额度（退化情形，但必须对）。"""
