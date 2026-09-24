@@ -1096,7 +1096,7 @@
     "revokedTag": "已收回",
     "revoke": "收回",
     "confirmRevoke": "收回这个红包？",
-    "confirmRevokeDesc": "会停用这 {n} 个密钥（可逆）。已经用掉的额度不会退回。",
+    "confirmRevokeDesc": "会**删除**这 {n} 个密钥 —— 它们会立刻从密钥列表消失，也不能再用。已经用掉的额度不会退回。",
     "revoked": "已收回",
     "revokedDetail": "停用了 {n} 个密钥",
     "detailTitle": "红包详情",

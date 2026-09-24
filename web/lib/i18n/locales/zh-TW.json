@@ -1301,7 +1301,7 @@
     "revokedTag": "已收回",
     "revoke": "收回",
     "confirmRevoke": "收回這個紅包？",
-    "confirmRevokeDesc": "會停用這 {n} 個金鑰（可逆）。已經用掉的額度不會退回。",
+    "confirmRevokeDesc": "會**刪除**這 {n} 個金鑰 —— 它們會立刻從金鑰列表消失，也不能再用。已經用掉的額度不會退回。",
     "revoked": "已收回",
     "revokedDetail": "停用了 {n} 個金鑰",
     "detailTitle": "紅包詳情",

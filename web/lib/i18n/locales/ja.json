@@ -1301,7 +1301,7 @@
     "revokedTag": "取り消し済み",
     "revoke": "取り消す",
     "confirmRevoke": "この紅包を取り消しますか？",
-    "confirmRevokeDesc": "{n} 個のキーを無効化します（元に戻せます）。すでに消費された分は戻りません。",
+    "confirmRevokeDesc": "この {n} 個のキーを**削除**します —— キー一覧からすぐに消え、使えなくなります。すでに消費された分は戻りません。",
     "revoked": "取り消しました",
     "revokedDetail": "{n} 個のキーを無効化しました",
     "detailTitle": "紅包の詳細",

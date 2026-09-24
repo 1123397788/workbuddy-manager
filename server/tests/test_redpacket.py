@@ -279,14 +279,43 @@ class CreatePacketTest(unittest.TestCase):
                          '回滚后不该有任何密钥残留')
         self.assertEqual(db.query_one('SELECT COUNT(*) AS c FROM red_packets')['c'], 0)
 
-    def test_revoke_disables_whole_batch(self) -> None:
-        from server import redpacket
+    def test_revoke_removes_whole_batch(self) -> None:
+        """收回 = **删除**这批密钥（需求：收回后立刻从密钥列表消失）。
+
+        只断言 `not enabled` 是不够的 —— 密钥被真删掉之后 LEFT JOIN 出来的
+        `enabled` 也是 None（转 bool 为 False），所以那条断言在「停用」和
+        「删除」两种实现下都会过。要直接查密钥表还在不在。
+        """
+        from server import db, redpacket
         out = self._create(shares=4)
         self.assertEqual(redpacket.revoke_packet(out['id']), 4)
+
+        left = db.query_one(
+            'SELECT COUNT(*) AS n FROM api_keys WHERE id IN '
+            '(SELECT key_id FROM red_packet_shares WHERE packet_id = ?)',
+            (out['id'],))['n']
+        self.assertEqual(left, 0, '收回后这批密钥应该真的没了')
+
+        # 份额记录要留着：删了就看不出「这个红包原本几份」
         detail = redpacket.packet_detail(out['id'])
-        self.assertTrue(all(not it['enabled'] for it in detail['items']))
-        # 可逆：停用不是删除
         self.assertEqual(len(detail['items']), 4)
+        self.assertTrue(redpacket.list_packets()[0]['revoked'])
+
+    def test_revoke_keeps_usage_history(self) -> None:
+        """收回删的是密钥，**不是**这批红包发过多少的痕迹。
+
+        `red_packet_shares` 与用量记录都留着 —— 否则「这批红包到底发出去
+        多少、被用掉多少」再也答不上来。
+        """
+        from server import db, redpacket
+        out = self._create(shares=3)
+        redpacket.revoke_packet(out['id'])
+        n = db.query_one(
+            'SELECT COUNT(*) AS n FROM red_packet_shares WHERE packet_id = ?',
+            (out['id'],))['n']
+        self.assertEqual(n, 3, '份额记录不该被删')
+        self.assertEqual(float(redpacket.packet_detail(out['id'])['total_amount']),
+                         out['total_amount'], '金额也还在')
 
     def test_detail_never_exposes_plaintext(self) -> None:
         """详情接口不能回明文 key —— 库里只有哈希，界面上也不该有。"""

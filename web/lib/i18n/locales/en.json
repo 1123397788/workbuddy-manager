@@ -1325,7 +1325,7 @@
     "revokedTag": "Revoked",
     "revoke": "Revoke",
     "confirmRevoke": "Revoke this red packet?",
-    "confirmRevokeDesc": "This disables all {n} keys (reversible). Quota already spent is not refunded.",
+    "confirmRevokeDesc": "This **deletes** all {n} keys — they disappear from the key list immediately and stop working. Quota already spent is not refunded.",
     "revoked": "Revoked",
     "revokedDetail": "Disabled {n} keys",
     "detailTitle": "Red packet detail",

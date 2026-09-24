@@ -267,13 +267,23 @@ def list_packets() -> list[dict]:
     for r in rows:
         # 「被领走了多少份」而不是「密钥被停用了多少把」—— 抽奖式红包一眼要看的是
         # 进度（还剩几份），停用数只在收回后才等于份数。两个都返回，让界面自己选。
+        # 「被领走」要把**作废的**排除掉：收回时未领的份额会被打上空 IP 标记
+        # （见 revoke_packet），它们既不是「已领」也不是「还能领」。
         claimed = db.query_one(
             'SELECT COUNT(*) AS n FROM red_packet_shares '
-            'WHERE packet_id = ? AND claimed_by_ip IS NOT NULL', (r['id'],))['n']
-        revoked = db.query_one(
+            'WHERE packet_id = ? AND claimed_by_ip IS NOT NULL '
+            "  AND claimed_by_ip != ''", (r['id'],))['n']
+        # 收回的判据：这批**密钥已经全都不存在了**。
+        #
+        # 为什么不用「有多少把被停用」：收回现在是**删除**密钥（收回后要立刻从
+        # 列表消失），删了就没得数。也不看「有没有空 IP 标记」—— 那个标记只在
+        # 有未领份额时才会被打上，而「全部被领完之后再收回」不会有标记，那种
+        # 情况只能靠「密钥还在不在」判断。
+        n_keys = db.query_one(
             'SELECT COUNT(*) AS n FROM red_packet_shares s '
-            'JOIN api_keys k ON k.id = s.key_id '
-            'WHERE s.packet_id = ? AND k.enabled = 0', (r['id'],))['n']
+            'JOIN api_keys k ON k.id = s.key_id WHERE s.packet_id = ?',
+            (r['id'],))['n']
+        revoked = n_keys == 0 and int(r['shares_actual']) > 0
         out.append({
             'id': r['id'],
             'title': r['title'],
@@ -287,7 +297,9 @@ def list_packets() -> list[dict]:
             'created_at': int(r['created_at']),
             'expires_at': int(r['expires_at']),
             'claimed': int(claimed),
-            'revoked': int(revoked) >= int(r['shares']),
+            # 上面已经算成布尔了，别再拿 shares 去比一遍 —— 那是「停用数 ≥ 份数」
+            # 时代留下的判据，换判据时漏改这里会让 revoked 恒为 false。
+            'revoked': bool(revoked),
         })
     return out
 
@@ -297,11 +309,13 @@ def packet_detail(packet_id: int) -> dict | None:
     p = db.query_one('SELECT * FROM red_packets WHERE id = ?', (packet_id,))
     if not p:
         return None
+    # LEFT JOIN：收回时那批密钥被**删掉**了（见 revoke_packet），用 INNER JOIN
+    # 的话已收回的红包在详情里会变成空的 —— 而「这个红包原本几份」恰恰是
+    # 收回之后最该看得到的信息。键没了就显示成已收回。
     rows = db.query(
         'SELECT s.amount, s.claimed_by_ip, s.claimed_at, '
-        '       k.id AS key_id, k.prefix, k.enabled, k.expires_at, '
-        '       k.used_tokens, k.used_credit '
-        'FROM red_packet_shares s JOIN api_keys k ON k.id = s.key_id '
+        '       k.id AS key_id, k.prefix, k.enabled, k.used_tokens, k.used_credit '
+        'FROM red_packet_shares s LEFT JOIN api_keys k ON k.id = s.key_id '
         'WHERE s.packet_id = ? ORDER BY s.id', (packet_id,))
     return {
         'id': p['id'],
@@ -317,11 +331,15 @@ def packet_detail(packet_id: int) -> dict | None:
         'code': p['code'] or '',
         'items': [{
             'key_id': r['key_id'],
-            'prefix': r['prefix'],
+            # 同上：密钥已被收回删掉时 prefix 是 NULL，直接透给前端会渲染成
+            # 「null…」——那看着像 bug。空串让界面走「已收回」那一支。
+            'prefix': r['prefix'] or '',
             'amount': float(r['amount']),
             'enabled': bool(r['enabled']),
-            'used_tokens': int(r['used_tokens']),
-            'used_credit': float(r['used_credit']),
+            # LEFT JOIN 之后密钥可能不存在（收回时被删了）→ 这几个字段是 NULL，
+            # 直接 int(None) 会抛 TypeError 把整个详情接口打成 500
+            'used_tokens': int(r['used_tokens'] or 0),
+            'used_credit': float(r['used_credit'] or 0),
             # 被谁领走的（抽奖式才有）。空 IP 是「收回时被作废」的占位，见
             # revoke_packet —— 那种既不是没领、也不是有效领取。
             'claimed_by_ip': (r['claimed_by_ip'] or None) or None,
@@ -331,27 +349,36 @@ def packet_detail(packet_id: int) -> dict | None:
 
 
 def revoke_packet(packet_id: int) -> int:
-    """收回整批：停用已发出的密钥，并**作废还没被抽走的份额**。返回停用数量。
+    """收回整批：**删除**这批密钥，并作废还没被抽走的份额。返回删除的数量。
 
-    为什么是「停用」而不是「删除」：停用是可逆的（后悔了能放开），
-    而且用量记录还在——删了就查不到「这批红包到底被用掉多少」。
+    「删除」而不是「停用」是刻意的：收回的语义是「这批不发了」，那些密钥就该
+    从密钥列表里消失 —— 留一堆 disabled 的红包密钥在列表里，既占地方又没人会
+    去逐把处理（这也正是「红包密钥」要单独分组的原因）。要留痕的话，用量记录
+    与 `red_packet_shares` 都还在，删掉 api_keys 行不影响「这批发过多少」。
 
     为什么要连未领的份额一起作废：抽奖是「从**未领取**的份额里随机取一份」。
-    只停用已发出的密钥的话，收回之后链接**照样能抽出新的一份**——管理员以为
+    只处理已发出的密钥的话，收回之后链接**照样能抽出新的一份** —— 管理员以为
     收回了，实际还能继续领。
+
+    删除后 `red_packet_shares.key_id` 会悬空（指向不存在的密钥），所以
+    `packet_detail` 用的是 LEFT JOIN，界面上把这类显示成已收回。
     """
     rows = db.query(
-        'SELECT k.id FROM red_packet_shares s JOIN api_keys k ON k.id = s.key_id '
-        'WHERE s.packet_id = ? AND k.enabled = 1', (packet_id,))
-    for r in rows:
-        keysvc.update_key(int(r['id']), {'enabled': False})
+        'SELECT key_id FROM red_packet_shares WHERE packet_id = ?', (packet_id,))
+    key_ids = [int(r['key_id']) for r in rows if r['key_id']]
+    for kid in key_ids:
+        try:
+            keysvc.delete_key(kid)
+        except Exception:  # noqa: BLE001
+            # 单把删不掉（例如已被手工删过）不该让整批收回失败
+            continue
     # 未领的份额用空 IP 占位（抽奖只认 claimed_by_ip IS NULL）。
     # 不删行：删了就看不出「这个红包原本几份、收回时还剩几份」。
     db.execute(
         "UPDATE red_packet_shares SET claimed_by_ip = '', claimed_at = ? "
         "WHERE packet_id = ? AND claimed_by_ip IS NULL",
         (int(time.time()), packet_id))
-    return len(rows)
+    return len(key_ids)
 
 
 class ClaimError(ValueError):

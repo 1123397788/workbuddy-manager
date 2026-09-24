@@ -1301,7 +1301,7 @@
     "revokedTag": "회수됨",
     "revoke": "회수",
     "confirmRevoke": "이 봉투를 회수할까요?",
-    "confirmRevokeDesc": "키 {n}개를 비활성화합니다(되돌릴 수 있음). 이미 사용한 한도는 반환되지 않습니다.",
+    "confirmRevokeDesc": "키 {n}개를 **삭제**합니다 — 목록에서 즉시 사라지고 더 이상 쓸 수 없습니다. 이미 사용한 한도는 반환되지 않습니다.",
     "revoked": "회수 완료",
     "revokedDetail": "키 {n}개를 비활성화했습니다",
     "detailTitle": "봉투 상세",
