@@ -130,12 +130,18 @@ const copied = await page.evaluate(() => window.__copied || []);
 step(copied.some((t) => /^wbk_/.test(t)), '点「完成」会把密钥写进剪贴板',
      `剪贴板收到 ${copied.length} 条，首条=${(copied[0] || '').slice(0, 14)}…`);
 
-// 再开一次：应当提示「这个网络已经领过了」（每 IP 一次）
+// 再开一次：应当能看到「上次领到的那份」——包括密钥本身（关掉弹窗才想起没存
+// 是常事，能刷新找回比「请联系发红包的人」有用得多）
 await page.reload({waitUntil: 'load'});
 await page.waitForTimeout(1200);
 const again = await page.locator('body').innerText();
 step(/已经领过/.test(again), '同一个网络再打开时提示已领过',
      (again.match(/[^\n]*已经领过[^\n]*/) || [''])[0]);
+step(!!keyMatch && again.includes(keyMatch[0]),
+     '而且把上次那份密钥显示回来了（明文只显示一次，刷新能找回）',
+     keyMatch ? `找回升钥 ${keyMatch[0].slice(0, 16)}…` : '(首轮没抓到密钥)');
+const againEndpoint = new RegExp(`${BASE.replace(/[/.]/g, '\\$&')}/v1`).test(again);
+step(againEndpoint, '二次访问时调用地址仍在页面上');
 await page.screenshot({path: path.join(OUT, 'after.png'), fullPage: true});
 
 await browser.close();

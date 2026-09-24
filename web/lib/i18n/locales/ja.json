@@ -430,7 +430,9 @@
     "quotaCredit": "クレジット上限",
     "quotaCreditHint": "上流が返す実際の課金で累計します（トークンからの推定ではありません）。上のトークン上限とは独立で、どちらかを超えると呼び出しが拒否されます。0 のままなら無制限",
     "creditUsed": "クレジット {used} / {quota}",
-    "modelsUnknown": "これらの名前に対応するモデルが見つかりません（入力ミスの可能性）：{names}。一覧に表示されず、呼び出しも拒否されます。"
+    "modelsUnknown": "これらの名前に対応するモデルが見つかりません（入力ミスの可能性）：{names}。一覧に表示されず、呼び出しも拒否されます。",
+    "tabNormal": "通常キー",
+    "tabPacket": "紅包のキー"
   },
   "logs": {
     "cacheShort": "キャッシュ {pct}%",
@@ -1300,7 +1302,7 @@
     "revokedTag": "取り消し済み",
     "revoke": "取り消す",
     "confirmRevoke": "この紅包を取り消しますか？",
-    "confirmRevokeDesc": "{n} 個のキーを無効化します（元に戻せます）。すでに消費された分は戻りません。",
+    "confirmRevokeDesc": "この {n} 個のキーを**削除**します —— キー一覧からすぐに消え、使えなくなります。すでに消費された分は戻りません。",
     "revoked": "取り消しました",
     "revokedDetail": "{n} 個のキーを無効化しました",
     "detailTitle": "紅包の詳細",
@@ -1344,6 +1346,7 @@
     "autoCopied": "キーを自動でコピーしました",
     "autoCopiedDetail": "そのまま貼り付けて使えます",
     "autoCopyFailed": "自動コピーに失敗しました",
-    "autoCopyFailedDetail": "前の画面に戻って手動でコピーしてください（平文は一度しか表示されません）"
+    "autoCopyFailedDetail": "前の画面に戻って手動でコピーしてください（平文は一度しか表示されません）",
+    "alreadyWithKey": "すでに受け取り済みです（これがあなたの分です）"
   }
 }

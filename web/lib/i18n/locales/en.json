@@ -454,7 +454,9 @@
     "quotaCredit": "Credit quota",
     "quotaCreditHint": "Accumulated from the real charge reported by the upstream (not estimated from tokens). Independent of the token quota above — exceeding either one blocks calls. Leave 0 for unlimited",
     "creditUsed": "{used} / {quota} credits",
-    "modelsUnknown": "No model matches these names (possible typo): {names}. They will not be listed and calls using them are rejected."
+    "modelsUnknown": "No model matches these names (possible typo): {names}. They will not be listed and calls using them are rejected.",
+    "tabNormal": "Regular keys",
+    "tabPacket": "From red packets"
   },
   "logs": {
     "cacheShort": "cache {pct}%",
@@ -1324,7 +1326,7 @@
     "revokedTag": "Revoked",
     "revoke": "Revoke",
     "confirmRevoke": "Revoke this red packet?",
-    "confirmRevokeDesc": "This disables all {n} keys (reversible). Quota already spent is not refunded.",
+    "confirmRevokeDesc": "This **deletes** all {n} keys — they disappear from the key list immediately and stop working. Quota already spent is not refunded.",
     "revoked": "Revoked",
     "revokedDetail": "Disabled {n} keys",
     "detailTitle": "Red packet detail",
@@ -1368,6 +1370,7 @@
     "autoCopied": "Key copied automatically",
     "autoCopiedDetail": "Just paste it where you need it",
     "autoCopyFailed": "Auto-copy failed",
-    "autoCopyFailedDetail": "Go back and copy it manually — the key is shown only once"
+    "autoCopyFailedDetail": "Go back and copy it manually — the key is shown only once",
+    "alreadyWithKey": "You've already claimed — here's yours"
   }
 }

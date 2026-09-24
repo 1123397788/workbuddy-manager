@@ -166,8 +166,24 @@ def _parse(row) -> dict:
 
 
 def list_keys() -> list[dict]:
-    rows = db.query('SELECT * FROM api_keys ORDER BY id DESC')
-    return [_parse(r) for r in rows]
+    """全部密钥，附带 `packet_id`（来源红包）。
+
+    为什么要在列表里带这个：红包一次生成一批、额度零碎，混在手工建的密钥里
+    很难看，界面上要能单独分组。用**标量子查询**而不是 JOIN —— JOIN 在
+    「一个 key 意外对应多条 share」时会把同一把密钥返回两遍（接口返回重复行
+    是最难查的一类问题），子查询天然只取一条。
+    """
+    rows = db.query(
+        'SELECT k.*, (SELECT s.packet_id FROM red_packet_shares s '
+        '             WHERE s.key_id = k.id LIMIT 1) AS packet_id '
+        'FROM api_keys k ORDER BY k.id DESC'
+    )
+    out = []
+    for r in rows:
+        item = _parse(r)
+        item['packet_id'] = r['packet_id']      # None = 手工建的
+        out.append(item)
+    return out
 
 
 def create_key(

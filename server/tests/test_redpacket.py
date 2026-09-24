@@ -279,14 +279,43 @@ class CreatePacketTest(unittest.TestCase):
                          '回滚后不该有任何密钥残留')
         self.assertEqual(db.query_one('SELECT COUNT(*) AS c FROM red_packets')['c'], 0)
 
-    def test_revoke_disables_whole_batch(self) -> None:
-        from server import redpacket
+    def test_revoke_removes_whole_batch(self) -> None:
+        """收回 = **删除**这批密钥（需求：收回后立刻从密钥列表消失）。
+
+        只断言 `not enabled` 是不够的 —— 密钥被真删掉之后 LEFT JOIN 出来的
+        `enabled` 也是 None（转 bool 为 False），所以那条断言在「停用」和
+        「删除」两种实现下都会过。要直接查密钥表还在不在。
+        """
+        from server import db, redpacket
         out = self._create(shares=4)
         self.assertEqual(redpacket.revoke_packet(out['id']), 4)
+
+        left = db.query_one(
+            'SELECT COUNT(*) AS n FROM api_keys WHERE id IN '
+            '(SELECT key_id FROM red_packet_shares WHERE packet_id = ?)',
+            (out['id'],))['n']
+        self.assertEqual(left, 0, '收回后这批密钥应该真的没了')
+
+        # 份额记录要留着：删了就看不出「这个红包原本几份」
         detail = redpacket.packet_detail(out['id'])
-        self.assertTrue(all(not it['enabled'] for it in detail['items']))
-        # 可逆：停用不是删除
         self.assertEqual(len(detail['items']), 4)
+        self.assertTrue(redpacket.list_packets()[0]['revoked'])
+
+    def test_revoke_keeps_usage_history(self) -> None:
+        """收回删的是密钥，**不是**这批红包发过多少的痕迹。
+
+        `red_packet_shares` 与用量记录都留着 —— 否则「这批红包到底发出去
+        多少、被用掉多少」再也答不上来。
+        """
+        from server import db, redpacket
+        out = self._create(shares=3)
+        redpacket.revoke_packet(out['id'])
+        n = db.query_one(
+            'SELECT COUNT(*) AS n FROM red_packet_shares WHERE packet_id = ?',
+            (out['id'],))['n']
+        self.assertEqual(n, 3, '份额记录不该被删')
+        self.assertEqual(float(redpacket.packet_detail(out['id'])['total_amount']),
+                         out['total_amount'], '金额也还在')
 
     def test_detail_never_exposes_plaintext(self) -> None:
         """详情接口不能回明文 key —— 库里只有哈希，界面上也不该有。"""
@@ -629,6 +658,46 @@ class ClaimTest(unittest.TestCase):
         self.assertEqual(float(row['quota_credit']), got['amount'],
                          '密钥配额与抽到的额度对不上')
 
+    def test_legacy_packet_without_plaintext_is_rejected(self) -> None:
+        """**旧红包**（明文那一列上线之前建的）抽奖必须明确报错，不能给空密钥。
+
+        这是真踩到的：`token` 列是后加的，旧红包那列是空的 —— 抽出来弹窗
+        显示不出来、复制按钮复制的是空串，用户看到「中奖了但什么都没有」。
+        第一版没测到这个场景（只测了新建的红包），所以线上才发现。
+
+        两条断言都要：**报错**，且**不消耗份额**（份额被消耗掉就更亏了 ——
+        抽到的人什么也没拿到，那一份却没了）。
+        """
+        from server import db, redpacket
+        p = self._make(shares=2)
+        db.execute('UPDATE red_packet_shares SET token = ? WHERE packet_id = ?',
+                   ('', p['id']))
+        with self.assertRaises(redpacket.ClaimError) as ctx:
+            redpacket.draw(p['code'], '1.2.3.4')
+        self.assertIn('旧版本', str(ctx.exception), '提示要说清是旧红包，别让人以为链接坏了')
+        left = db.query_one(
+            'SELECT COUNT(*) AS n FROM red_packet_shares '
+            'WHERE packet_id = ? AND claimed_by_ip IS NULL', (p['id'],))['n']
+        self.assertEqual(left, 2, '报错时不该消耗份额')
+
+    def test_backfill_gives_legacy_packets_a_code(self) -> None:
+        """旧红包（没有抽奖码的）在启动时会被补一个 —— 幂等，已有的不动。
+
+        已有的**不能**换：那等于让已经发出去的链接全部失效。
+        """
+        from server import db, redpacket
+        p = self._make(shares=2)
+        db.execute('UPDATE red_packets SET code = NULL WHERE id = ?', (p['id'],))
+
+        self.assertEqual(redpacket.backfill_codes(), 1, '应该补 1 个')
+        code = db.query_one('SELECT code FROM red_packets WHERE id = ?', (p['id'],))['code']
+        self.assertTrue(code, '补完不该还是空')
+
+        # 幂等：再跑一次不动它
+        self.assertEqual(redpacket.backfill_codes(), 0)
+        again = db.query_one('SELECT code FROM red_packets WHERE id = ?', (p['id'],))['code']
+        self.assertEqual(again, code, '已有的码不能被换掉（换了旧链接就失效了）')
+
     def test_claim_info_hides_key(self) -> None:
         """抽奖页的元信息**不含密钥** —— 没点开启之前不该能拿到。"""
         from server import redpacket
@@ -641,6 +710,38 @@ class ClaimTest(unittest.TestCase):
         after = redpacket.claim_info(p['code'], '1.2.3.4')
         self.assertEqual(after['left'], 2)
         self.assertTrue(after['claimed'], '抽过之后 claim_info 要能看出来')
+
+    def test_claim_info_returns_my_key_after_claiming(self) -> None:
+        """领过之后再看，要能拿回**自己那份**密钥。
+
+        需求：「同一个 ip 领取后第二次访问直接展示前面领取的 key」。
+        不返回的话，用户关掉弹窗就再也找不回来了（明文只显示那一次）。
+        """
+        from server import redpacket
+        p = self._make(shares=2)
+        before = redpacket.claim_info(p['code'], '1.2.3.4')
+        self.assertIsNone(before['my_key'], '没领过时不该有密钥')
+        self.assertIsNone(before['my_amount'])
+
+        got = redpacket.draw(p['code'], '1.2.3.4')
+        after = redpacket.claim_info(p['code'], '1.2.3.4')
+        self.assertEqual(after['my_key'], got['key'], '要能拿回同一把')
+        self.assertEqual(after['my_amount'], got['amount'])
+
+    def test_claim_info_does_not_leak_others_keys(self) -> None:
+        """别人领走的那份**不能**出现在我的 claim_info 里。
+
+        这是「第二次访问能看回自己的密钥」的边界：便利只对自己有效，
+        否则它就成了一个「谁都能看到所有密钥」的洞。
+        """
+        from server import redpacket
+        p = self._make(shares=3)
+        mine = redpacket.draw(p['code'], '1.1.1.1')
+        theirs = redpacket.draw(p['code'], '2.2.2.2')
+
+        info = redpacket.claim_info(p['code'], '1.1.1.1')
+        self.assertEqual(info['my_key'], mine['key'])
+        self.assertNotIn(theirs['key'], str(info), '别人的密钥出现在了我的响应里')
 
     def test_concurrent_draws_from_same_ip_give_one_key(self) -> None:
         """并发抽奖：同一个 IP 打多个请求，只能有一个成功。

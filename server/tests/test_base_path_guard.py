@@ -46,7 +46,7 @@ class PublicPageRedirectTest(unittest.TestCase):
 
     def test_api_client_exempts_public_pages(self) -> None:
         src = _src('lib/api.ts')
-        self.assertIn('publicPrefixes', src, '没有公开页白名单，401 会把访客踢去登录页')
+        self.assertIn('publicPaths', src, '没有公开页清单，401 会把访客踢去登录页')
         self.assertIn('${BASE_PATH}/claim', src, '抽奖页不在白名单里')
 
     def test_claim_page_lives_outside_the_guarded_layout(self) -> None:
