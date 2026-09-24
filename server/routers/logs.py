@@ -109,6 +109,6 @@ def list_logs(
 
 
 @router.post('/clear')
-def clear_logs(user: dict = Depends(security.require_admin)) -> dict:
+def clear_logs(user: dict = Depends(security.require_session_admin)) -> dict:
     db.execute('DELETE FROM request_logs')
     return {'ok': True}

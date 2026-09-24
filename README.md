@@ -708,7 +708,8 @@ export ANTHROPIC_MODEL=glm-5.2
 | `POST` | `/api/auth/start` `/api/auth/poll` | 管理员 | 扫码授权流程 |
 | `POST` | `/api/accounts/{file}/checkin` `/test` `/refresh` | 管理员 | 签到 / 测活 / 刷新 |
 | `DELETE` | `/api/accounts/{file}` | 管理员 | 删除账号 |
-| `GET/POST/PATCH/DELETE` | `/api/keys[/{id}]` | 会话 / 管理员 | 密钥管理 |
+| `GET/POST/PATCH/DELETE` | `/api/keys[/{id}]` | 会话 / 管理员 | 密钥管理（发给下游调模型） |
+| `GET/POST/PATCH/DELETE` | `/api/tokens[/{id}]` | 会话（管理员） | 管理面 API Token（给脚本 / CI，见 [docs/api-tokens.md](docs/api-tokens.md)） |
 | `GET` | `/api/logs` `/api/stats/*` | 会话 | 日志与用量 |
 | `GET/POST/DELETE` | `/api/security/*` | 会话 / 管理员 | IP 规则与审计 |
 | `GET/POST` | `/api/settings/*` | 会话 / 管理员 | 上游配置、模型映射 |
@@ -755,6 +756,9 @@ workbuddy-manager/
 - **真实 IP 取自反代覆盖写入的 `X-Real-IP`**（`X-Forwarded-For` 首段可伪造），
   避免 IP 白/黑名单、每密钥 IP 限制与登录锁定被冒充绕过
 - 登录失败**按 IP + 用户名双维度锁定**，防单机与换 IP 的分布式爆破
+- 管理面支持**作用域化 API Token**（只读 / 管理员，可吊销、可过期，库中仅存哈希、
+  全程审计），供脚本 / CI 免登录调用；**高危接口与令牌管理本身只接受会话登录**，
+  令牌泄露也无法提权或自助持久化（见 [docs/api-tokens.md](docs/api-tokens.md)）
 - 生产环境默认关闭 `/docs`、`/openapi.json`（`WB_ENABLE_DOCS=1` 开启）
 - 网关限制请求体大小（8 MiB）与每密钥调用频率（默认 120 次/分钟）
 - 已配置 CSP、`X-Frame-Options`、`X-Content-Type-Options` 等安全响应头

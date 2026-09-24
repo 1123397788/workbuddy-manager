@@ -9,6 +9,8 @@ import type {
   CreditsMeta,
   AccountsResponse,
   ApiKey,
+  ApiToken,
+  CreatedApiToken,
   IpAccessLog,
   IpRule,
   Me,
@@ -245,6 +247,22 @@ export const keyApi = {
   checkModels: (models: string[], realm: string) =>
     post<{checked: boolean; unknown: string[]; reason?: string}>(
       '/api/keys/check-models', {models, realm}),
+};
+
+/* ── 访问令牌（管理面作用域化 API Token）──────────────────
+ * 与 keyApi 是两套：那个是给下游调模型的网关密钥，这个授权管理接口。
+ * 明文只在创建时返回一次。 */
+export const tokenApi = {
+  list: () => get<ApiToken[]>('/api/tokens'),
+  create: (body: {name: string; scope: 'readonly' | 'admin'; expires_at: number | null}) =>
+    post<CreatedApiToken>('/api/tokens', body),
+  update: (id: number, body: {
+    name?: string;
+    scope?: 'readonly' | 'admin';
+    enabled?: boolean;
+    expires_at?: number | null;
+  }) => patch<ApiToken>(`/api/tokens/${id}`, body),
+  remove: (id: number) => del<{ok: boolean}>(`/api/tokens/${id}`),
 };
 
 /* ── 日志 ───────────────────────────────────────────── */

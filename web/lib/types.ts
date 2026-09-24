@@ -292,6 +292,34 @@ export interface ApiKey {
   key?: string;
 }
 
+/**
+ * 管理面**作用域化 API Token**（见 docs/api-tokens.md）。
+ *
+ * 与上面那把网关密钥（`ApiKey`）是**两套东西**：`ApiKey` 只授权模型调用；
+ * 本类型授权的是管理接口 `/api/*`，供脚本 / CI 免登录调用。
+ */
+export interface ApiToken {
+  id: number;
+  name: string;
+  /** 明文前 12 字符，用于展示与识别（明文本身不会再回传） */
+  prefix: string;
+  /** 权限：只读 / 管理员（角色由它决定） */
+  scope: 'readonly' | 'admin';
+  enabled: boolean;
+  /** 到期时刻（epoch 秒）；null = 永不过期 */
+  expires_at: number | null;
+  created_at: number;
+  /** 创建者用户名（审计用） */
+  created_by: string;
+  last_used_at: number | null;
+  last_used_ip: string | null;
+}
+
+/** 创建令牌的返回：比 ApiToken 多一个**仅此一次**的明文字段。 */
+export interface CreatedApiToken extends ApiToken {
+  token: string;
+}
+
 export interface RequestLog {
   id: number;
   ts: number;

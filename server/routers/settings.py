@@ -21,7 +21,7 @@ def get_upstream(user: dict = Depends(security.current_user)) -> dict:
 
 @router.post('/settings/upstream')
 async def save_upstream(body: dict, request: Request,
-                        user: dict = Depends(security.require_admin)) -> dict:
+                        user: dict = Depends(security.require_session_admin)) -> dict:
     # 必须是 async：同步路由会被 FastAPI 放进线程池执行，那里没有事件循环，
     # 无法调度后台重载任务（request_restart 将拿不到 running loop）。
     try:
@@ -112,7 +112,7 @@ def list_users(user: dict = Depends(security.current_user)) -> list[dict]:
 
 @router.post('/users')
 def add_user(body: UserIn, request: Request,
-             user: dict = Depends(security.require_admin)) -> dict:
+             user: dict = Depends(security.require_session_admin)) -> dict:
     """新建管理用户。
 
     审计是必须的：上次入侵里攻击者正是「先建自己的账号、再正常登录」，
@@ -138,7 +138,7 @@ def add_user(body: UserIn, request: Request,
 
 @router.patch('/users/{username}')
 def update_user(username: str, body: UserPatch, request: Request,
-                user: dict = Depends(security.require_admin)) -> dict:
+                user: dict = Depends(security.require_session_admin)) -> dict:
     """改密码 / 改角色。
 
     两种改动都必须**吊销该用户既有会话**：
@@ -194,7 +194,7 @@ def update_user(username: str, body: UserPatch, request: Request,
 
 @router.delete('/users/{username}')
 def delete_user(username: str, request: Request,
-                user: dict = Depends(security.require_admin)) -> dict:
+                user: dict = Depends(security.require_session_admin)) -> dict:
     cfg = security.load_users()
     users = cfg.get('users', [])
     target = next((u for u in users if u.get('username') == username), None)

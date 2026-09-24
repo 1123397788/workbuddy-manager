@@ -15,7 +15,7 @@ from . import config, db, security
 from .iputil import client_ip
 from .routers import (
     accounts, anthropic, auth, gateway, keys, logs, models, playground,
-    responses, security as security_router, settings, stats, system,
+    responses, security as security_router, settings, stats, system, tokens,
 )
 from .services import accountlog, renew, tasklog, taskrun
 
@@ -132,6 +132,8 @@ app.include_router(keys.router)
 app.include_router(logs.router)
 app.include_router(stats.router)
 app.include_router(security_router.router)
+# 管理面作用域化 API Token（见 docs/api-tokens.md）；接口本身只接受会话鉴权
+app.include_router(tokens.router)
 app.include_router(settings.router)
 app.include_router(system.router)
 app.include_router(models.router)
