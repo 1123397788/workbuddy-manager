@@ -1334,6 +1334,35 @@
     "fieldModelsPlaceholder": "One per line, or comma-separated\ne.g. glm-5.2, deepseek-v4.1-flash",
     "fieldModelsHint": "Token packets must set a scope: token counts depend heavily on the model (the same context costs different amounts on different models), so “N tokens” is ambiguous without one. Credit packets have no such field — they are billed by real spend, so any model works.",
     "errModels": "Please specify the allowed models for a token packet",
-    "modelsScoped": "Models: {list}"
+    "modelsScoped": "Models: {list}",
+    "claimLink": "Claim link",
+    "copyLink": "Copy link",
+    "claimLinkHint": "Share this link — each person (per IP) draws once",
+    "linkCopied": "Link copied"
+  },
+  "claim": {
+    "noCode": "This link is missing its claim code",
+    "failed": "Couldn't open this packet",
+    "untitled": "A red packet",
+    "subtitle": "{left} of {total} left",
+    "expiresAt": "Expires {at}",
+    "expired": "This packet has expired",
+    "empty": "Too late — all claimed",
+    "already": "This network has already claimed",
+    "open": "Open",
+    "won": "You got one!",
+    "wonDesc": "You drew",
+    "unitTokens": "Tokens",
+    "unitCredits": "Credits",
+    "yourKey": "Your key",
+    "copy": "Copy key",
+    "copied": "Key copied",
+    "copyFailed": "Copy failed — please select the key above manually",
+    "done": "Done",
+    "closeHint": "Closing copies the key automatically",
+    "autoCopied": "Key copied automatically",
+    "autoCopiedDetail": "Just paste it where you need it",
+    "autoCopyFailed": "Auto-copy failed",
+    "autoCopyFailedDetail": "Go back and copy it manually — the key is shown only once"
   }
 }

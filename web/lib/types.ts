@@ -868,9 +868,16 @@ export interface RedPacket {
    * 积分是「钱」任何模型都能用。
    */
   models: string[];
+  /**
+   * 抽奖码 —— 拼出分享链接用。**它是凭据**：拿到就能抽走一份，
+   * 所以只在管理端接口下发，不要贴到公开场合。
+   */
+  code: string;
   created_by: string;
   created_at: number;
   expires_at: number;
+  /** 已被抽走的份数（抽奖式红包看的就是这个进度） */
+  claimed: number;
   /** 整批都已停用 = 已收回（部分停用不算，那种情况去密钥页看单把） */
   revoked: boolean;
 }
@@ -895,6 +902,29 @@ export interface RedPacketDetail extends RedPacket {
  * 界面上必须提示「离开后无法再看到」并提供复制/导出 —— 这是「直接发 key」
  * 方案的固有代价，不是缺陷。
  */
+/** 抽奖页的元信息。**不含密钥** —— 没点「开启」之前不该能拿到。 */
+export interface ClaimInfo {
+  title: string;
+  quota_kind: RedPacketKind;
+  shares: number;
+  /** 还剩几份 */
+  left: number;
+  models: string[];
+  expires_at: number;
+  expired: boolean;
+  /** 本机（IP）是不是已经抽过了 */
+  claimed: boolean;
+}
+
+/** 抽到的那一份。`key` 是**明文**，只在抽的这一刻返回。 */
+export interface DrawResult {
+  amount: number;
+  quota_kind: RedPacketKind;
+  models: string[];
+  key: string;
+  expires_at: number;
+}
+
 export interface CreatedRedPacket {
   id: number;
   title: string;
@@ -904,6 +934,8 @@ export interface CreatedRedPacket {
   mode: RedPacketMode;
   /** 同上：token 红包非空、积分红包恒为空 */
   models: string[];
+  /** 抽奖码 —— 拼分享链接用（仅此一次能拿到，之后详情接口还会给） */
+  code: string;
   created_at: number;
   expires_at: number;
   keys: ApiKey[];

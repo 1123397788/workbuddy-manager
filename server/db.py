@@ -269,6 +269,9 @@ CREATE TABLE IF NOT EXISTS red_packets (
   shares        INTEGER NOT NULL,
   -- 分配方式：lucky（拼手气）/ even（均分）
   mode          TEXT    NOT NULL,
+  -- 抽奖码（分享链接用）。高熵随机串，**没有它就拿不到红包里的密钥**，
+  -- 所以它本身就是凭据 —— 界面上只展示给管理员，不写进日志。
+  code          TEXT,
   -- 这批密钥限定的模型（JSON 数组）。
   --
   -- **token 红包必须非空，积分红包必须为空**（见 redpacket.validate）：
@@ -286,11 +289,32 @@ CREATE TABLE IF NOT EXISTS red_packets (
 
 -- 每一份红包 = 一个密钥。amount 是这一份分到的额度，各份之和
 -- **精确等于** red_packets.total_amount（浮点余数由 split_amount 兜底到最后一份）。
+--
+-- 为什么存明文 token（而 api_keys 里只存哈希）
+-- -------------------------------------------
+-- 密钥通常在创建时返回一次明文、之后只留哈希——但红包要**过一段时间**才由
+-- 领取者抽走，抽的那一刻必须把明文给他。两个选择：
+--   a) 抽奖时现场生成密钥（那就不能同时支持「管理员直接把 key 发出去」）；
+--   b) 创建时把明文存下来，抽奖时取出来。
+-- 这里选了 b，因为一个红包要能**同时**支持两种分发（管理员自己发 / 分享链接）。
+--
+-- 代价说清楚：库被读走 = 这批红包的密钥泄露。缓解措施是它们的**寿命短**
+-- （默认 7 天）且**额度有限**（红包的本质就是小额分发）；而库里本来就有
+-- 同等敏感的东西。真要更严，得引入加密依赖——但项目刻意保持窄依赖
+-- （只有 fastapi/uvicorn/httpx/pydantic），自己写加密比明文更危险
+-- （会让人以为它是安全的）。
 CREATE TABLE IF NOT EXISTS red_packet_shares (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   packet_id INTEGER NOT NULL,
   key_id    INTEGER NOT NULL,
-  amount    REAL    NOT NULL
+  amount    REAL    NOT NULL,
+  -- 密钥明文。抽奖时原样返回给领取者；管理员自己发时也不用再查别处。
+  token     TEXT    NOT NULL DEFAULT '',
+  -- 领取者 IP 与时刻。NULL = 还没人抽到这一份。
+  -- **每 IP 对同一个红包只能抽一次**，由 redpacket.draw 在事务里保证
+  -- （不去建 UNIQUE 约束：SQLite 加约束要重建表，而这里靠事务已足够）。
+  claimed_by_ip TEXT,
+  claimed_at    INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_packet_shares ON red_packet_shares(packet_id);
 """
@@ -453,6 +477,16 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # 缓存是否生效与「账号是否稳定」强相关，和上面那列一起看才有意义。
     # NULL = 上游未返回该字段（旧版上游/非对话类请求），与「命中 0」是两回事。
     ('request_logs', 'cache_hit_tokens', 'INTEGER'),
+    # 红包的抽奖支持：抽奖码 + 明文密钥 + 领取记录。
+    #
+    # 必须走迁移而不只是改建表语句：`CREATE TABLE IF NOT EXISTS` 对**已存在**
+    # 的表什么都不做（红包那两张表在本功能的前半部分就建好了），不补列的话
+    # 升级上来的部署一抽奖就报「no such column」。新装不受影响，两条路径
+    # 都要能走通，所以建表语句与迁移两处都得有。
+    ('red_packets', 'code', 'TEXT'),
+    ('red_packet_shares', 'token', "TEXT NOT NULL DEFAULT ''"),
+    ('red_packet_shares', 'claimed_by_ip', 'TEXT'),
+    ('red_packet_shares', 'claimed_at', 'INTEGER'),
 )
 
 

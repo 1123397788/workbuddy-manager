@@ -170,6 +170,9 @@ def create_packet(name: str, kind: str, total: float, shares: int,
     amounts = split_amount(total, shares, kind, mode)
     expires_at = int(time.time()) + (ttl_days or DEFAULT_TTL_DAYS) * 86400
     title = db._clean(name, 64) or '红包'
+    # 抽奖码：token_urlsafe(16) ≈ 128 位熵（22 字符）。
+    # 它是**凭据** —— 拿到它就能抽走红包里的一份，所以要长到猜不出来。
+    code = secrets.token_urlsafe(16)
     # 归一化后再存：与密钥侧的白名单是**同一份**数据（都从用户输入来），
     # 两边规则不同的话，红包说限了 A、密钥实际限了 B，排查时会怀疑人生。
     model_list = [str(m).strip() for m in (models or []) if str(m).strip()] \
@@ -184,10 +187,10 @@ def create_packet(name: str, kind: str, total: float, shares: int,
             conn.execute('BEGIN')
             packet_id = conn.execute(
                 'INSERT INTO red_packets(title, quota_kind, total_amount, shares, '
-                'mode, models, created_by, created_at, expires_at) '
-                'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'mode, models, code, created_by, created_at, expires_at) '
+                'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (title, kind, float(total), shares, mode,
-                 json.dumps(model_list), actor, int(time.time()), expires_at),
+                 json.dumps(model_list), code, actor, int(time.time()), expires_at),
             ).lastrowid
             for i, amount in enumerate(amounts, start=1):
                 made = keysvc.create_key(
@@ -199,9 +202,11 @@ def create_packet(name: str, kind: str, total: float, shares: int,
                     _conn=conn,          # ← 在同一个事务里，由本函数统一提交
                 )
                 conn.execute(
-                    'INSERT INTO red_packet_shares(packet_id, key_id, amount) '
-                    'VALUES(?, ?, ?)',
-                    (packet_id, made['id'], float(amount)),
+                    'INSERT INTO red_packet_shares(packet_id, key_id, amount, token) '
+                    'VALUES(?, ?, ?, ?)',
+                    # token 存明文：抽奖时要原样返回给领取者，而那时库里只剩
+                    # 哈希（见 db.py 建表处的取舍说明）。
+                    (packet_id, made['id'], float(amount), made['key']),
                 )
                 created.append(made)
             conn.commit()
@@ -217,6 +222,7 @@ def create_packet(name: str, kind: str, total: float, shares: int,
         'shares': shares,
         'mode': mode,
         'models': model_list,   # token 红包非空、积分红包恒为空
+        'code': code,           # 抽奖码 —— 拼出分享链接用（它是凭据，别外传）
         'expires_at': expires_at,
         'created_at': int(time.time()),
         'keys': created,        # 含明文 key —— **仅此一次**
@@ -244,7 +250,12 @@ def list_packets() -> list[dict]:
     )
     out = []
     for r in rows:
-        used = db.query_one(
+        # 「被领走了多少份」而不是「密钥被停用了多少把」—— 抽奖式红包一眼要看的是
+        # 进度（还剩几份），停用数只在收回后才等于份数。两个都返回，让界面自己选。
+        claimed = db.query_one(
+            'SELECT COUNT(*) AS n FROM red_packet_shares '
+            'WHERE packet_id = ? AND claimed_by_ip IS NOT NULL', (r['id'],))['n']
+        revoked = db.query_one(
             'SELECT COUNT(*) AS n FROM red_packet_shares s '
             'JOIN api_keys k ON k.id = s.key_id '
             'WHERE s.packet_id = ? AND k.enabled = 0', (r['id'],))['n']
@@ -256,10 +267,12 @@ def list_packets() -> list[dict]:
             'shares': int(r['shares']),
             'mode': r['mode'],
             'models': _models_of(r['models']),
+            'code': r['code'] or '',
             'created_by': r['created_by'],
             'created_at': int(r['created_at']),
             'expires_at': int(r['expires_at']),
-            'revoked': int(used) >= int(r['shares']),
+            'claimed': int(claimed),
+            'revoked': int(revoked) >= int(r['shares']),
         })
     return out
 
@@ -270,7 +283,8 @@ def packet_detail(packet_id: int) -> dict | None:
     if not p:
         return None
     rows = db.query(
-        'SELECT s.amount, k.id AS key_id, k.prefix, k.enabled, k.expires_at, '
+        'SELECT s.amount, s.claimed_by_ip, s.claimed_at, '
+        '       k.id AS key_id, k.prefix, k.enabled, k.expires_at, '
         '       k.used_tokens, k.used_credit '
         'FROM red_packet_shares s JOIN api_keys k ON k.id = s.key_id '
         'WHERE s.packet_id = ? ORDER BY s.id', (packet_id,))
@@ -285,6 +299,7 @@ def packet_detail(packet_id: int) -> dict | None:
         'created_by': p['created_by'],
         'created_at': int(p['created_at']),
         'expires_at': int(p['expires_at']),
+        'code': p['code'] or '',
         'items': [{
             'key_id': r['key_id'],
             'prefix': r['prefix'],
@@ -292,19 +307,112 @@ def packet_detail(packet_id: int) -> dict | None:
             'enabled': bool(r['enabled']),
             'used_tokens': int(r['used_tokens']),
             'used_credit': float(r['used_credit']),
+            # 被谁领走的（抽奖式才有）。空 IP 是「收回时被作废」的占位，见
+            # revoke_packet —— 那种既不是没领、也不是有效领取。
+            'claimed_by_ip': (r['claimed_by_ip'] or None) or None,
+            'claimed_at': int(r['claimed_at']) if r['claimed_at'] else None,
         } for r in rows],
     }
 
 
 def revoke_packet(packet_id: int) -> int:
-    """收回整批：停用这批 key。返回停用的数量。
+    """收回整批：停用已发出的密钥，并**作废还没被抽走的份额**。返回停用数量。
 
     为什么是「停用」而不是「删除」：停用是可逆的（后悔了能放开），
     而且用量记录还在——删了就查不到「这批红包到底被用掉多少」。
+
+    为什么要连未领的份额一起作废：抽奖是「从**未领取**的份额里随机取一份」。
+    只停用已发出的密钥的话，收回之后链接**照样能抽出新的一份**——管理员以为
+    收回了，实际还能继续领。
     """
     rows = db.query(
         'SELECT k.id FROM red_packet_shares s JOIN api_keys k ON k.id = s.key_id '
         'WHERE s.packet_id = ? AND k.enabled = 1', (packet_id,))
     for r in rows:
         keysvc.update_key(int(r['id']), {'enabled': False})
+    # 未领的份额用空 IP 占位（抽奖只认 claimed_by_ip IS NULL）。
+    # 不删行：删了就看不出「这个红包原本几份、收回时还剩几份」。
+    db.execute(
+        "UPDATE red_packet_shares SET claimed_by_ip = '', claimed_at = ? "
+        "WHERE packet_id = ? AND claimed_by_ip IS NULL",
+        (int(time.time()), packet_id))
     return len(rows)
+
+
+class ClaimError(ValueError):
+    """抽奖失败。`already` 为真表示「这个 IP 已经领过了」——与其它失败区分，
+    前端要给的提示不同（前者是「你已经抽过」，后者是「来晚了/链接失效」）。"""
+
+    def __init__(self, message: str, *, already: bool = False) -> None:
+        super().__init__(message)
+        self.already = already
+
+
+def claim_info(code: str, ip: str) -> dict:
+    """抽奖页要显示的信息。**不含密钥** —— 没点「开启」之前不该能拿到。"""
+    p = db.query_one('SELECT * FROM red_packets WHERE code = ?', (code,))
+    if not p:
+        raise ClaimError('红包不存在或链接已失效')
+    left = db.query_one(
+        'SELECT COUNT(*) AS n FROM red_packet_shares '
+        'WHERE packet_id = ? AND claimed_by_ip IS NULL', (p['id'],))['n']
+    mine = db.query_one(
+        'SELECT id FROM red_packet_shares '
+        'WHERE packet_id = ? AND claimed_by_ip = ?', (p['id'], ip))
+    return {
+        'title': p['title'],
+        'quota_kind': p['quota_kind'],
+        'shares': int(p['shares']),
+        'left': int(left),
+        'models': _models_of(p['models']),
+        'expires_at': int(p['expires_at']),
+        'expired': int(p['expires_at']) < time.time(),
+        'claimed': mine is not None,
+    }
+
+
+def draw(code: str, ip: str) -> dict:
+    """抽一份，返回**明文密钥**与这一份的额度。每个 IP 对同一个红包只能抽一次。
+
+    「查重 → 随机选一份 → 标记领取」必须在**同一个事务**里完成。分开做的话
+    两个并发请求会各自查到「没领过」、各自挑一份：同一个人抽到两份，而且其中
+    一份原本该属于别人（先被标记走了）。
+    """
+    conn = db.connect()
+    with db._lock:
+        try:
+            conn.execute('BEGIN')
+            p = conn.execute('SELECT * FROM red_packets WHERE code = ?',
+                             (code,)).fetchone()
+            if not p:
+                raise ClaimError('红包不存在或链接已失效')
+            if int(p['expires_at']) < time.time():
+                raise ClaimError('红包已过期')
+            if conn.execute('SELECT id FROM red_packet_shares '
+                            'WHERE packet_id = ? AND claimed_by_ip = ?',
+                            (p['id'], ip)).fetchone():
+                raise ClaimError('这个网络已经领过了', already=True)
+            row = conn.execute(
+                'SELECT id FROM red_packet_shares '
+                'WHERE packet_id = ? AND claimed_by_ip IS NULL '
+                'ORDER BY RANDOM() LIMIT 1', (p['id'],)).fetchone()
+            if not row:
+                raise ClaimError('红包已被领完')
+            conn.execute(
+                'UPDATE red_packet_shares SET claimed_by_ip = ?, claimed_at = ? '
+                'WHERE id = ?', (ip, int(time.time()), row['id']))
+            got = conn.execute(
+                'SELECT amount, token FROM red_packet_shares WHERE id = ?',
+                (row['id'],)).fetchone()
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    return {
+        'amount': float(got['amount']),
+        'quota_kind': p['quota_kind'],
+        'models': _models_of(p['models']),
+        'key': got['token'],          # 明文；库里那份只给这一次
+        'expires_at': int(p['expires_at']),
+    }

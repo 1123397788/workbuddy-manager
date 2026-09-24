@@ -1310,6 +1310,35 @@
     "fieldModelsPlaceholder": "한 줄에 하나, 또는 쉼표로 구분\n예: glm-5.2, deepseek-v4.1-flash",
     "fieldModelsHint": "토큰 봉투는 범위를 반드시 지정해야 합니다. 토큰 수는 모델에 크게 좌우되므로(같은 문맥도 모델마다 소비량이 다름) 범위가 없으면 \"몇 토큰\"이라는 표현이 모호해집니다. 크레딧 봉투에는 이 항목이 없습니다(실제 과금 기준이라 모든 모델을 쓸 수 있음).",
     "errModels": "토큰 봉투에는 허용할 모델을 입력해 주세요",
-    "modelsScoped": "허용 모델: {list}"
+    "modelsScoped": "허용 모델: {list}",
+    "claimLink": "추첨 링크",
+    "copyLink": "링크 복사",
+    "claimLinkHint": "이 링크를 공유하면 사람마다(IP 기준) 한 번씩 추첨합니다",
+    "linkCopied": "링크를 복사했습니다"
+  },
+  "claim": {
+    "noCode": "링크에 추첨 코드가 없습니다",
+    "failed": "이 봉투를 열 수 없습니다",
+    "untitled": "빨간 봉투",
+    "subtitle": "{total}개 중 {left}개 남음",
+    "expiresAt": "{at} 만료",
+    "expired": "이 봉투는 만료되었습니다",
+    "empty": "늦었습니다 — 모두 소진되었습니다",
+    "already": "이 네트워크는 이미 받았습니다",
+    "open": "열기",
+    "won": "축하합니다!",
+    "wonDesc": "받은 금액",
+    "unitTokens": "토큰",
+    "unitCredits": "크레딧",
+    "yourKey": "내 키",
+    "copy": "키 복사",
+    "copied": "키를 복사했습니다",
+    "copyFailed": "복사 실패 — 위의 키를 직접 선택해 주세요",
+    "done": "완료",
+    "closeHint": "닫으면 키가 자동으로 복사됩니다",
+    "autoCopied": "키를 자동으로 복사했습니다",
+    "autoCopiedDetail": "바로 붙여넣어 사용할 수 있습니다",
+    "autoCopyFailed": "자동 복사 실패",
+    "autoCopyFailedDetail": "이전 화면으로 돌아가 직접 복사해 주세요 — 평문은 한 번만 표시됩니다"
   }
 }

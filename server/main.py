@@ -132,6 +132,8 @@ app.include_router(accounts.router)
 app.include_router(keys.router)
 # 红包：批量发放带额度的密钥（与密钥同属「分发」这件事，所以挨着放）
 app.include_router(redpackets.router)
+# 抽奖：**公开端点**（收到链接的人不需要账号），单独挂便于区分边界
+app.include_router(redpackets.claim_router)
 app.include_router(logs.router)
 app.include_router(stats.router)
 app.include_router(security_router.router)

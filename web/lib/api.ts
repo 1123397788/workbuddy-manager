@@ -9,7 +9,9 @@ import type {
   CreditsMeta,
   AccountsResponse,
   ApiKey,
+  ClaimInfo,
   CreatedRedPacket,
+  DrawResult,
   RedPacket,
   RedPacketDetail,
   RedPacketKind,
@@ -272,6 +274,15 @@ export const redPacketApi = {
   }) => post<CreatedRedPacket>('/api/red-packets', body),
   /** 收回整批（停用这批密钥，可逆）。返回停用的数量。 */
   revoke: (id: number) => post<{revoked: number}>(`/api/red-packets/${id}/revoke`),
+};
+
+/* ── 抽奖（**公开**，不需要登录）─────────────────────────
+ * 收到链接的是同事朋友，不该要求他们注册账号。防滥用靠「每 IP 一次」
+ * + 128 位抽奖码 + 有效期。 */
+export const claimApi = {
+  info: (code: string) => get<ClaimInfo>(`/api/claim/${encodeURIComponent(code)}`),
+  /** 抽一份。同一 IP 第二次会 409（提示「你已经抽过了」）。 */
+  draw: (code: string) => post<DrawResult>(`/api/claim/${encodeURIComponent(code)}`, {}),
 };
 
 /* ── 访问令牌（管理面作用域化 API Token）──────────────────

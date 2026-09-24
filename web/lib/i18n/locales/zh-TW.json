@@ -1310,6 +1310,35 @@
     "fieldModelsPlaceholder": "每行一個，或用逗號分隔\n例如：glm-5.2, deepseek-v4.1-flash",
     "fieldModelsHint": "Token 紅包必須限定範圍：token 數與模型強相關（同一段上下文在不同模型下消耗不同），不限定的話「多少 token」這個說法是浮動的。積分紅包沒有這一項 —— 它按真實扣費算，任何模型都能用。",
     "errModels": "Token 紅包請先填寫限定的模型",
-    "modelsScoped": "限定模型：{list}"
+    "modelsScoped": "限定模型：{list}",
+    "claimLink": "抽獎連結",
+    "copyLink": "複製連結",
+    "claimLinkHint": "把這個連結發給別人，每個人（按 IP）抽一次",
+    "linkCopied": "連結已複製"
+  },
+  "claim": {
+    "noCode": "連結缺少抽獎碼",
+    "failed": "打不開這個紅包",
+    "untitled": "一個紅包",
+    "subtitle": "還剩 {left} / {total} 份",
+    "expiresAt": "{at} 失效",
+    "expired": "這個紅包已經過期了",
+    "empty": "來晚了，已經被領完",
+    "already": "這個網路已經領過了",
+    "open": "開啟",
+    "won": "恭喜！",
+    "wonDesc": "你抽到了",
+    "unitTokens": "Token 額度",
+    "unitCredits": "積分額度",
+    "yourKey": "你的金鑰",
+    "copy": "複製金鑰",
+    "copied": "已複製金鑰",
+    "copyFailed": "複製失敗，請手動選取上面的金鑰",
+    "done": "完成",
+    "closeHint": "關閉時會自動複製金鑰",
+    "autoCopied": "已自動複製金鑰",
+    "autoCopiedDetail": "直接貼上即可使用",
+    "autoCopyFailed": "自動複製失敗",
+    "autoCopyFailedDetail": "請回到上一步手動複製 —— 明文只顯示這一次"
   }
 }

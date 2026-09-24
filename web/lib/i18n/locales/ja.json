@@ -1310,6 +1310,35 @@
     "fieldModelsPlaceholder": "1 行に 1 つ、またはカンマ区切り\n例：glm-5.2, deepseek-v4.1-flash",
     "fieldModelsHint": "トークン紅包は範囲の指定が必須です。トークン数はモデルに強く依存し（同じ文脈でもモデルごとに消費量が違います）、指定がないと「何トークン」という表現が曖昧になります。クレジット紅包にはこの項目がありません（実際の消費で課金されるため、どのモデルでも使えます）。",
     "errModels": "トークン紅包には許可するモデルを入力してください",
-    "modelsScoped": "許可モデル：{list}"
+    "modelsScoped": "許可モデル：{list}",
+    "claimLink": "抽選リンク",
+    "copyLink": "リンクをコピー",
+    "claimLinkHint": "このリンクを配ると、1 人（IP ごと）につき 1 回抽選できます",
+    "linkCopied": "リンクをコピーしました"
+  },
+  "claim": {
+    "noCode": "リンクに抽選コードがありません",
+    "failed": "この紅包を開けません",
+    "untitled": "紅包",
+    "subtitle": "残り {left} / {total} 份",
+    "expiresAt": "{at} に失効",
+    "expired": "この紅包は期限切れです",
+    "empty": "遅かった——すべて配布済みです",
+    "already": "このネットワークはすでに受け取り済みです",
+    "open": "開ける",
+    "won": "おめでとうございます！",
+    "wonDesc": "当選したのは",
+    "unitTokens": "トークン",
+    "unitCredits": "クレジット",
+    "yourKey": "あなたのキー",
+    "copy": "キーをコピー",
+    "copied": "キーをコピーしました",
+    "copyFailed": "コピーに失敗しました。上のキーを手動で選択してください",
+    "done": "完了",
+    "closeHint": "閉じるとキーが自動でコピーされます",
+    "autoCopied": "キーを自動でコピーしました",
+    "autoCopiedDetail": "そのまま貼り付けて使えます",
+    "autoCopyFailed": "自動コピーに失敗しました",
+    "autoCopyFailedDetail": "前の画面に戻って手動でコピーしてください（平文は一度しか表示されません）"
   }
 }

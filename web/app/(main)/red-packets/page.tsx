@@ -144,6 +144,24 @@ export default function RedPacketsPage() {
       .join('\n');
   }
 
+  /**
+   * 抽奖链接。用 query 参数而不是路径段：静态导出下动态路径要预生成所有可能的
+   * code（不可能），而 query 不需要任何路由支持 —— `/claim/` 是普通静态页。
+   */
+  function claimUrl(code: string): string {
+    return `${window.location.origin}/claim/?code=${encodeURIComponent(code)}`;
+  }
+
+  async function copyLink(code: string) {
+    try {
+      await navigator.clipboard.writeText(claimUrl(code));
+      notify.ok(t('redPacket.linkCopied'));
+    } catch {
+      // 如实说失败：谎报成功会让用户去粘贴一个空剪贴板（项目里踩过这个坑）
+      notify.err(t('redPacket.copyFailed'), t('redPacket.copyFailedDetail'));
+    }
+  }
+
   async function copyAll(pack: CreatedRedPacket) {
     const text = plainText(pack);
     try {
@@ -273,6 +291,34 @@ export default function RedPacketsPage() {
           <div className="mb-2 text-[11px] text-amber-600 dark:text-amber-400">
             {t('redPacket.resultWarn')}
           </div>
+
+          {/* 抽奖链接：把链接发出去让每个人自己抽（每个 IP 一次）。
+              与「自己拿 key 去发」是两条路——用哪条都行，也可以只用其中一条。
+              用 query 参数而不是路径段：静态导出下动态路径要预生成所有可能的
+              code（不可能），query 不需要任何路由支持。 */}
+          {created.code && (
+            <div className="mb-2 rounded-2xl bg-background/60 px-3 py-2">
+              <div className="mb-1 text-[11px] text-muted-foreground">
+                {t('redPacket.claimLink')}
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate text-[11px]">
+                  {claimUrl(created.code)}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 rounded-full"
+                  onClick={() => copyLink(created.code)}
+                >
+                  <Copy className="mr-1 h-3 w-3" />{t('redPacket.copyLink')}
+                </Button>
+              </div>
+              <div className="mt-1 text-[10px] leading-4 text-muted-foreground">
+                {t('redPacket.claimLinkHint')}
+              </div>
+            </div>
+          )}
           <div className="max-h-64 overflow-auto rounded-2xl bg-background/60 p-2 font-mono text-[11px] leading-5">
             {created.keys.map((k) => (
               <div key={k.id} className="flex items-center justify-between gap-2">

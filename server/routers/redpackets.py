@@ -15,6 +15,15 @@ from ..iputil import client_ip
 
 router = APIRouter(prefix='/api/red-packets', tags=['red-packets'])
 
+# 抽奖端点**单独一个 router**，因为它与上面那组的前提完全不同：上面全要登录
+# 甚至要管理员，这里**必须公开**（收到链接的是同事、朋友，让他们注册账号不合理）。
+# 分开挂的目的就是让这条边界一眼可见 —— 混在同一个 router 里，将来加端点时
+# 很容易顺手写上一个 Depends，或者反过来漏掉。
+#
+# 公开端的防滥用靠三件事：每个 IP 只能抽一次、抽奖码 128 位熵（猜不到）、
+# 以及红包自带的失效时间。
+claim_router = APIRouter(prefix='/api/claim', tags=['red-packet-claim'])
+
 
 class PacketIn(BaseModel):
     # 标题是**备注**（「给老王的福利」），会拼进每个密钥的名字里，
@@ -90,3 +99,34 @@ def revoke_packet(packet_id: int, request: Request,
     security.audit(user, 'revoke_red_packet', str(packet_id),
                    f'停用 {n} 个密钥；来源 {client_ip(request)}')
     return {'revoked': n}
+
+
+# ── 抽奖（公开）──────────────────────────────────────────
+# 收到链接的人不需要登录 —— 他们多半没有账号，也不该为了领个红包去注册。
+# 防滥用靠「每 IP 一次」+ 128 位抽奖码 + 有效期，见 claim_router 的说明。
+
+@claim_router.get('/{code}')
+def claim_info(code: str, request: Request) -> dict:
+    """抽奖页要显示的信息（份数、还剩几份、本机抽过没有）。**不含密钥**。
+
+    没点「开启」之前不该能拿到密钥，所以这里只回元信息。
+    """
+    try:
+        return redpacket.claim_info(code, client_ip(request))
+    except redpacket.ClaimError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@claim_router.post('/{code}')
+def claim_draw(code: str, request: Request) -> dict:
+    """抽一份，返回**明文密钥**与这一份的额度。
+
+    409 = 「这个网络已经领过了」（可区分，前端提示不同）；
+    404 = 链接失效 / 已过期 / 已领完 —— 都归为「来晚了」，不必让外部区分
+    （区分了反而给探测者线索：能试出「这个码存在但领完了」）。
+    """
+    try:
+        return redpacket.draw(code, client_ip(request))
+    except redpacket.ClaimError as exc:
+        raise HTTPException(status_code=409 if exc.already else 404,
+                            detail=str(exc)) from exc

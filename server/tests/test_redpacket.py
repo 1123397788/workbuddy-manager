@@ -439,6 +439,32 @@ class RouteTest(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()['revoked'], 5)
 
+    def test_claim_endpoints_are_public(self) -> None:
+        """抽奖端点**不需要登录** —— 收到链接的是同事朋友，不该要求他们注册。
+
+        验证方式是把依赖覆盖**清掉**，让请求走真实的认证逻辑：如果哪天有人
+        顺手给这两个端点加上 `Depends(current_user)`，未登录会 401，这条就会红。
+        （`claim_router` 与需要登录的 `router` 分开挂，正是为了让这条边界明显。）
+        """
+        self._as(self.ADMIN)
+        made = self.c.post('/api/red-packets', json={
+            'title': '公开抽奖', 'quota_kind': KIND_CREDIT, 'total_amount': 100,
+            'shares': 2, 'mode': MODE_LUCKY, 'ttl_days': 7}).json()
+
+        self._app.dependency_overrides.clear()      # 模拟未登录的外部访问者
+
+        r = self.c.get(f"/api/claim/{made['code']}")
+        self.assertEqual(r.status_code, 200, f'抽奖页信息不该要登录: {r.text}')
+        self.assertNotIn('key', r.json(), '没点开启之前不该能拿到密钥')
+
+        r = self.c.post(f"/api/claim/{made['code']}")
+        self.assertEqual(r.status_code, 200, f'抽奖不该要登录: {r.text}')
+        self.assertTrue(r.json()['key'].startswith('wbk_'))
+
+        # 第二次：同一 IP 已经领过 → 409（可区分「你已经领过」与「来晚了」）
+        r2 = self.c.post(f"/api/claim/{made['code']}")
+        self.assertEqual(r2.status_code, 409, f'同 IP 第二次该是 409: {r2.text}')
+
     def test_model_scope_rule_through_http(self) -> None:
         """模型范围的规则在 HTTP 层同样生效（两类相反）。
 
@@ -458,6 +484,160 @@ class RouteTest(unittest.TestCase):
         r = self.c.post('/api/red-packets',
                         json={**base, 'quota_kind': KIND_CREDIT, 'models': ['glm-5.2']})
         self.assertEqual(r.status_code, 400, f'积分红包带模型应被拒: {r.text}')
+
+
+class ClaimTest(unittest.TestCase):
+    """抽奖：每 IP 一次、返回明文、领完即止。
+
+    这一组里最关键的是 `test_same_ip_can_only_draw_once` —— 需求就是
+    「限定 ip 访问，每个 ip 只能访问一次」，而它靠的是 draw() 里那个事务。
+    写成「先查再写」的话并发下会漏，所以那条也顺带测了并发。
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from server import config, db
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls._orig = config.DB_PATH
+        config.DB_PATH = Path(cls._tmp.name) / 'claim.db'
+        db._conn = None
+        db.connect()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        from server import config, db
+        if db._conn is not None:
+            db._conn.close()
+        db._conn = None
+        config.DB_PATH = cls._orig
+        try:
+            cls._tmp.cleanup()
+        except PermissionError:
+            pass
+
+    def setUp(self) -> None:
+        from server import db
+        for t in ('red_packet_shares', 'red_packets', 'api_keys'):
+            db.execute(f'DELETE FROM {t}')
+
+    def _make(self, shares: int = 3, total: float = 100.0, ttl_days: int | None = 7,
+              kind: str = KIND_CREDIT):
+        from server import redpacket
+        return redpacket.create_packet(
+            name='抽奖红包', kind=kind, total=total, shares=shares,
+            mode=MODE_LUCKY, ttl_days=ttl_days, actor='admin')
+
+    def test_draw_returns_key_and_amount(self) -> None:
+        from server import redpacket
+        p = self._make()
+        got = redpacket.draw(p['code'], '1.2.3.4')
+        self.assertTrue(got['key'].startswith('wbk_'), '必须返回明文密钥')
+        self.assertGreater(got['amount'], 0)
+        self.assertEqual(got['quota_kind'], KIND_CREDIT)
+
+    def test_same_ip_can_only_draw_once(self) -> None:
+        """**核心**：同一个 IP 抽第二次必须被拒，且能区分出「已经领过」。"""
+        from server import redpacket
+        p = self._make()
+        redpacket.draw(p['code'], '1.2.3.4')
+        with self.assertRaises(redpacket.ClaimError) as ctx:
+            redpacket.draw(p['code'], '1.2.3.4')
+        self.assertTrue(ctx.exception.already,
+                        '要能区分「已经领过」与「来晚了」——前端提示不同')
+
+    def test_different_ips_get_different_shares(self) -> None:
+        """不同 IP 各抽一份，拿到的是**不同的**密钥。"""
+        from server import redpacket
+        p = self._make(shares=3)
+        keys = {redpacket.draw(p['code'], f'10.0.0.{i}')['key'] for i in range(3)}
+        self.assertEqual(len(keys), 3, '三个 IP 应该拿到三把不同的密钥')
+
+    def test_exhausted(self) -> None:
+        from server import redpacket
+        p = self._make(shares=2)
+        for i in range(2):
+            redpacket.draw(p['code'], f'10.0.0.{i}')
+        with self.assertRaises(redpacket.ClaimError) as ctx:
+            redpacket.draw(p['code'], '10.0.0.99')
+        self.assertFalse(ctx.exception.already, '领完不是「你已经领过」')
+
+    def test_expired(self) -> None:
+        from server import db, redpacket
+        p = self._make()
+        db.execute('UPDATE red_packets SET expires_at = ? WHERE id = ?',
+                   (int(time.time()) - 10, p['id']))
+        with self.assertRaises(redpacket.ClaimError):
+            redpacket.draw(p['code'], '1.2.3.4')
+
+    def test_unknown_code(self) -> None:
+        from server import redpacket
+        with self.assertRaises(redpacket.ClaimError):
+            redpacket.draw('not-a-real-code', '1.2.3.4')
+
+    def test_revoked_packet_cannot_be_drawn(self) -> None:
+        """收回后链接不该还能抽出新的一份。
+
+        只停用已发出的密钥是不够的 —— 那样收回之后**照样能抽**
+        （未领的份额还在池子里），管理员以为收回了、实际还能领。
+        """
+        from server import redpacket
+        p = self._make(shares=3)
+        redpacket.revoke_packet(p['id'])
+        with self.assertRaises(redpacket.ClaimError):
+            redpacket.draw(p['code'], '1.2.3.4')
+
+    def test_drawn_key_has_matching_quota(self) -> None:
+        """抽到的明文密钥，配额必须**等于这一份的额度** —— 否则红包就发错了。"""
+        from server import db, keysvc, redpacket
+        p = self._make(shares=2, kind=KIND_CREDIT)
+        got = redpacket.draw(p['code'], '1.2.3.4')
+        key = keysvc.resolve(got['key'])
+        self.assertIsNotNone(key, '抽到的密钥应该能解析（真的建出来了）')
+        row = db.query_one('SELECT quota_credit FROM api_keys WHERE id = ?',
+                           (key['id'],))
+        self.assertEqual(float(row['quota_credit']), got['amount'],
+                         '密钥配额与抽到的额度对不上')
+
+    def test_claim_info_hides_key(self) -> None:
+        """抽奖页的元信息**不含密钥** —— 没点开启之前不该能拿到。"""
+        from server import redpacket
+        p = self._make()
+        info = redpacket.claim_info(p['code'], '1.2.3.4')
+        self.assertNotIn('key', info)
+        self.assertEqual(info['left'], 3)
+        self.assertFalse(info['claimed'])
+        redpacket.draw(p['code'], '1.2.3.4')
+        after = redpacket.claim_info(p['code'], '1.2.3.4')
+        self.assertEqual(after['left'], 2)
+        self.assertTrue(after['claimed'], '抽过之后 claim_info 要能看出来')
+
+    def test_concurrent_draws_from_same_ip_give_one_key(self) -> None:
+        """并发抽奖：同一个 IP 打多个请求，只能有一个成功。
+
+        这是**事务**在挡的（draw 里的 BEGIN + 查重 + 标记）。写成
+        「先查再写」的话两个线程会各自查到「没领过」，同一人拿两份、
+        而其中一份本该属于别人。
+        """
+        import threading
+
+        from server import redpacket
+        p = self._make(shares=5)
+        got: list[str] = []
+        errs: list[str] = []
+
+        def one() -> None:
+            try:
+                got.append(redpacket.draw(p['code'], '9.9.9.9')['key'])
+            except Exception as exc:  # noqa: BLE001
+                errs.append(str(exc))
+
+        threads = [threading.Thread(target=one) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(len(got), 1, f'同一 IP 只该成功一次，实际 {len(got)} 次')
+        self.assertEqual(len(errs), 5)
 
 
 if __name__ == '__main__':
