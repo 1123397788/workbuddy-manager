@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .. import db, keysvc, security
-from ..services import modelcatalog
+from ..services import keyexport, modelcatalog
 from ..iputil import client_ip
 
 router = APIRouter(prefix='/api/keys', tags=['keys'])
@@ -169,3 +169,113 @@ def delete_key(key_id: int, request: Request,
         raise HTTPException(status_code=404, detail='密钥不存在')
     security.audit(user, 'delete_key', str(key_id), f'来源 {client_ip(request)}')
     return {'ok': True}
+
+
+class ExportIn(BaseModel):
+    """导出请求。`token` 必须是**创建时返回的明文**（见 /export 的说明）。"""
+    client: str = Field(max_length=16)
+    token: str = Field(min_length=1)
+    # cc-switch 还要指定应用；ZCode 忽略该字段
+    app: str = Field(default='', max_length=16)
+    # 面板对外地址（可选）。留空则按本次请求推导。
+    base_url: str = Field(default='', max_length=256)
+    provider_name: str = Field(default='', max_length=64)
+    # 模型清单（可选）。留空则按密钥白名单 / 目录缓存推导，见 _export_models
+    models: list[str] = Field(default_factory=list)
+    default_model: str = Field(default='', max_length=128)
+
+
+def _derive_base_url(request: Request, override: str) -> str:
+    """面板对外地址：优先显式传入，否则按请求推导。
+
+    推导用 `request.base_url`（Starlette 会看 X-Forwarded-* 头），
+    子路径部署时再补上 `config.BASE_PATH`——否则生成的 baseUrl 会缺前缀，
+    客户端调用全部 404。
+    """
+    from .. import config as _config
+    if override.strip():
+        return override.strip().rstrip('/')
+    base = str(request.base_url).rstrip('/')
+    if _config.BASE_PATH and not base.endswith(_config.BASE_PATH):
+        base += _config.BASE_PATH
+    return base
+
+
+def _export_models(body: ExportIn, realm: str) -> list[str]:
+    """决定这份配置里写哪些模型。
+
+    优先级（都在**网关口径**下产出，keyexport 负责补前缀）：
+
+      1. 调用方显式传入的 `models`（前端可带密钥白名单，最准）；
+      2. 目录缓存里该版本的清单（`cached_ids` 只读缓存不发网络）；
+      3. 都没有 → 交给 keyexport 用 default_model 兜底。
+
+    不在这里发网络请求：导出是交互路径，不该被上游慢响应拖住。缓存空时宁可
+    少写几个模型，也不要让用户等。
+    """
+    if body.models:
+        return list(body.models)
+    cached = modelcatalog.cached_ids(realm)
+    return sorted(cached) if cached else []
+
+
+@router.post('/export')
+def export_key(body: ExportIn, request: Request,
+               user: dict = Depends(security.require_admin)) -> dict:
+    """把一把密钥导出为 cc-switch / ZCode 的配置片段（**只读、无副作用**）。
+
+    **为什么要传明文 token 而不是 key_id**：面板只存哈希，库里拿不回明文；
+    只有创建密钥的响应里那一次有。所以本端点不查库、不接受 key_id——
+    调用方（前端）把刚拿到的明文传进来，服务端只做格式转换。
+
+    为什么不写客户端文件：写盘/入库属「一键导入」，涉及客户端竞态与部署形态
+    （面板可能在服务器上），是独立特性；这里先把**无副作用的导出**合入，
+    风险最小（见 docs/proposal-key-onclick-import.md §4、§9）。
+
+    404 语义：本端点不按 id 查库，故不存在 404 分支；参数非法一律 400。
+    """
+    client = str(body.client or '').strip().lower()
+    if client not in keyexport.CLIENTS:
+        raise HTTPException(status_code=400,
+                            detail=f'client 必须是 {keyexport.CLIENTS} 之一')
+
+    # 版本：token 对应的密钥查不到时退回 cn。查得到就用它，避免给国际版
+    # 模型配了 cn: 前缀（两边同名模型是不同的东西）。
+    resolved = keysvc.resolve(body.token)
+    realm = str((resolved or {}).get('realm') or '').strip() or 'cn'
+    if realm not in ('cn', 'global'):
+        realm = 'cn'
+
+    base_url = keyexport.gateway_base_url(_derive_base_url(request, body.base_url))
+    name = body.provider_name.strip() or f"WorkBuddy {((resolved or {}).get('name') or 'key')}"
+    model_list = _export_models(body, realm)
+    default_model = body.default_model.strip() or None
+
+    try:
+        if client == 'ccswitch':
+            app = str(body.app or '').strip().lower()
+            if app not in keyexport.CCSWITCH_APPS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f'导出 cc-switch 时必须指定 app（{keyexport.CCSWITCH_APPS}）')
+            settings = keyexport.to_ccswitch(
+                token=body.token, base_url=base_url, app=app, name=name,
+                models=model_list, realm=realm, default_model=default_model)
+            payload = {'app_type': app, 'name': name, 'settings_config': settings}
+        else:
+            settings = keyexport.to_zcode(
+                token=body.token, base_url=base_url, name=name,
+                # 用密钥前缀做 providerId：同一把密钥重复导入时能对上同一个
+                # 供应商（upsert 而非追加），前缀本身就是公开信息。
+                provider_id=f"workbuddy-{(resolved or {}).get('prefix') or 'manual'}",
+                models=model_list, realm=realm, default_model=default_model)
+            payload = {'name': name, 'provider': settings}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+    # 导出会把明文密钥交给客户端，属敏感操作：留痕（不记密钥本身）
+    security.audit(user, 'export_key', str((resolved or {}).get('prefix') or 'manual'),
+                   f'client={client}；模型 {len(model_list) or 1} 个；'
+                   f'来源 {client_ip(request)}')
+    return {'client': client, 'base_url': base_url, 'realm': realm,
+            'models': model_list, 'name': name, **payload}

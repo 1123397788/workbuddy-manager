@@ -101,6 +101,17 @@ export default function KeysPage() {
   const [busy, setBusy] = useState(false);
   const [issued, setIssued] = useState<string | null>(null);
   /**
+   * 一次性展示弹窗里选中的导出目标（cc-switch 还要分 Claude / Codex）。
+   *
+   * 为什么要选而不是直接给两个按钮：cc-switch 的 claude 与 codex 是**两份
+   * 不同的配置**（前者写 env.ANTHROPIC_*，后者写 auth.OPENAI_API_KEY + TOML），
+   * 点哪个都能出结果，用户得先说明要哪一份，否则只能二选一猜。
+   */
+  const [exportTarget, setExportTarget] = useState<'ccswitch-claude' | 'ccswitch-codex' | 'zcode'>('ccswitch-claude');
+  /** 导出结果（原样展示的文本片段）；null = 还没导出 */
+  const [exported, setExported] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  /**
    * 模型白名单里**匹配不到已知模型**的名字（issue #46）。
    *
    * 为什么要有：白名单是自由文本，填错不会报错，只会在下游表现为「模型列表是
@@ -277,6 +288,39 @@ export default function KeysPage() {
   // 否则会把用户引到一个 404 的地址。
   const baseUrl =
     typeof window !== 'undefined' ? `${window.location.origin}${BASE_PATH}` : '';
+
+  /**
+   * 导出刚创建的密钥为客户端配置片段。
+   *
+   * 为什么只在弹窗里可用：面板只存哈希，`issued` 是明文唯一存在的一刻；
+   * 关掉弹窗后就连服务端也拿不回完整密钥了（`/api/keys/export` 因此要求
+   * 调用方传明文，而不是传 key_id）。这里把明文原样交给后端生成片段。
+   *
+   * 拿到结果**只展示、不落盘**：写客户端配置属「一键导入」，涉及客户端是否
+   * 在运行、面板是否与本机同机等问题，是独立特性（见 docs 提案）。导出本身
+   * 无副作用，可以放心先上。
+   */
+  const doExport = useCallback(async () => {
+    if (!issued) return;
+    setExporting(true);
+    try {
+      const app = exportTarget === 'zcode' ? undefined
+        : (exportTarget === 'ccswitch-codex' ? 'codex' : 'claude');
+      const body = exportTarget === 'zcode'
+        ? {client: 'zcode' as const, token: issued}
+        : {client: 'ccswitch' as const, app: app as 'claude' | 'codex', token: issued};
+      const res = await keyApi.exportConfig({...body, baseUrl, models: form.models
+        .split(/[\n,]/).map((s) => s.trim()).filter(Boolean)});
+      // 展示可直接粘贴的片段：cc-switch 用 settings_config，ZCode 用整个片段
+      const payload = res.client === 'ccswitch' ? res.settings_config : res.provider;
+      setExported(JSON.stringify(payload, null, 2));
+      notify.ok(t('keys.exported'));
+    } catch (e) {
+      notify.err(errText(e));
+    } finally {
+      setExporting(false);
+    }
+  }, [issued, exportTarget, baseUrl, form.models, t]);
 
   // 分组过滤。keys 的量级是「几十到几百」，一次渲染算两遍不值得上 useMemo
   // （那要多写一层依赖数组，还更容易漏依赖）。
@@ -708,7 +752,7 @@ export default function KeysPage() {
       </Dialog>
 
       {/* 一次性展示新密钥 */}
-      <Dialog open={!!issued} onOpenChange={(v) => !v && setIssued(null)}>
+      <Dialog open={!!issued} onOpenChange={(v) => !v && (setIssued(null), setExported(null))}>
         <DialogContent className="max-w-[520px]">
           <DialogHeader>
             <DialogTitle>{t('keys.createdTitle')}</DialogTitle>
@@ -726,9 +770,42 @@ export default function KeysPage() {
               <code className="min-w-0 flex-1 break-all font-mono text-[11px]">{baseUrl}/v1</code>
               <CopyButton value={`${baseUrl}/v1`} title={t('keys.copyBaseUrl')} />
             </div>
+
+            {/* 导出为客户端配置片段（cc-switch / ZCode）。
+                只在**这一刻**可行：面板只存哈希，关掉弹窗后谁也拿不回明文。 */}
+            <div className="space-y-2 rounded-2xl border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium">{t('keys.exportTitle')}</span>
+                <div className="flex items-center gap-2">
+                  <Select value={exportTarget}
+                          onValueChange={(v) => { setExportTarget(v as typeof exportTarget); setExported(null); }}>
+                    <SelectTrigger className="h-7 w-[168px] rounded-full text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ccswitch-claude">{t('keys.exportCcClaude')}</SelectItem>
+                      <SelectItem value="ccswitch-codex">{t('keys.exportCcCodex')}</SelectItem>
+                      <SelectItem value="zcode">{t('keys.exportZcode')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-7 rounded-full text-xs"
+                          onClick={doExport} disabled={exporting}>
+                    {exporting ? t('common.loading') : t('keys.exportBtn')}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">{t('keys.exportHint')}</p>
+              {exported ? (
+                <div className="flex items-start gap-2 rounded-xl bg-muted p-2">
+                  <Textarea readOnly value={exported}
+                            className="min-h-[120px] flex-1 font-mono text-[11px]" />
+                  <CopyButton value={exported} size="sm" showLabel label={t('common.copy')} />
+                </div>
+              ) : null}
+            </div>
           </div>
           <DialogFooter>
-            <Button className="rounded-full" onClick={() => setIssued(null)}>
+            <Button className="rounded-full" onClick={() => { setIssued(null); setExported(null); }}>
               {t('keys.savedIt')}
             </Button>
           </DialogFooter>

@@ -437,7 +437,14 @@
     "creditUsed": "積分 {used} / {quota}",
     "modelsUnknown": "這些名字找不到對應模型（可能拼錯了）：{names}。它們不會被列出，呼叫時也會被拒。",
     "tabNormal": "一般金鑰",
-    "tabPacket": "紅包金鑰"
+    "tabPacket": "紅包金鑰",
+    "exportTitle": "匯出為客戶端設定",
+    "exportCcClaude": "cc-switch（Claude）",
+    "exportCcCodex": "cc-switch（Codex）",
+    "exportZcode": "ZCode",
+    "exportBtn": "匯出",
+    "exportHint": "產生可直接貼進客戶端設定的片段。僅此一次可用——關閉後金鑰只剩雜湊，無法再次匯出。",
+    "exported": "設定片段已產生"
   },
   "logs": {
     "cacheShort": "快取 {pct}%",

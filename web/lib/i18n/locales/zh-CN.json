@@ -437,7 +437,14 @@
     "creditUsed": "积分 {used} / {quota}",
     "modelsUnknown": "这些名字找不到对应模型（可能拼错了）：{names}。它们不会被列出，调用时也会被拒。",
     "tabNormal": "普通密钥",
-    "tabPacket": "红包密钥"
+    "tabPacket": "红包密钥",
+    "exportTitle": "导出为客户端配置",
+    "exportCcClaude": "cc-switch（Claude）",
+    "exportCcCodex": "cc-switch（Codex）",
+    "exportZcode": "ZCode",
+    "exportBtn": "导出",
+    "exportHint": "生成可直接粘贴到客户端配置里的片段。仅此一次可用——关闭后密钥只剩哈希，无法再次导出。",
+    "exported": "配置片段已生成"
   },
   "logs": {
     "cacheShort": "缓存 {pct}%",

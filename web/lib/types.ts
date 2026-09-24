@@ -305,6 +305,27 @@ export interface ApiKey {
 }
 
 /**
+ * 密钥导出结果（`POST /api/keys/export`）。
+ *
+ * 两个客户端的载荷载体不同，故用可选字段而不是联合类型：调用方按 `client`
+ * 取值即可，避免为两个分支各写一份收窄逻辑。
+ *   · ccswitch → `app_type` + `settings_config`
+ *   · zcode    → `provider`（片段，含 providerRule 与 providerModelRules）
+ */
+export interface KeyExportResult {
+  client: 'ccswitch' | 'zcode';
+  /** 面板对外地址 + /v1，客户端实际要填的 base URL */
+  base_url: string;
+  realm: 'cn' | 'global';
+  /** **网关口径**的模型 id（带 cn: / global: 前缀） */
+  models: string[];
+  name: string;
+  app_type?: 'claude' | 'codex';
+  settings_config?: Record<string, unknown>;
+  provider?: Record<string, unknown>;
+}
+
+/**
  * 管理面**作用域化 API Token**（见 docs/api-tokens.md）。
  *
  * 与上面那把网关密钥（`ApiKey`）是**两套东西**：`ApiKey` 只授权模型调用；

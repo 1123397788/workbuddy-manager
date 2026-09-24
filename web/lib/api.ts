@@ -20,6 +20,7 @@ import type {
   CreatedApiToken,
   IpAccessLog,
   IpRule,
+  KeyExportResult,
   Me,
   AuditLogPage,
   ModelCatalog,
@@ -262,6 +263,22 @@ export const keyApi = {
   checkModels: (models: string[], realm: string) =>
     post<{checked: boolean; unknown: string[]; reason?: string}>(
       '/api/keys/check-models', {models, realm}),
+  /**
+   * 把一把**刚创建**的密钥导出为客户端配置片段（cc-switch / ZCode）。
+   *
+   * 必须传明文 `token`：面板只存哈希，库里拿不回明文——这个端点的存在前提
+   * 就是「调用方此刻手里有明文」。因此它只在一次性展示弹窗里被调用，
+   * 密钥列表那行（只有 prefix）导不出来。
+   */
+  exportConfig: (body: {
+    client: 'ccswitch' | 'zcode';
+    token: string;
+    app?: 'claude' | 'codex';
+    baseUrl?: string;
+    providerName?: string;
+    models?: string[];
+    defaultModel?: string;
+  }) => post<KeyExportResult>('/api/keys/export', body),
 };
 
 /* ── 红包：批量发放带额度的密钥（见 server/redpacket.py）────

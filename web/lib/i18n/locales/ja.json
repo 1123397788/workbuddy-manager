@@ -437,7 +437,14 @@
     "creditUsed": "クレジット {used} / {quota}",
     "modelsUnknown": "これらの名前に対応するモデルが見つかりません（入力ミスの可能性）：{names}。一覧に表示されず、呼び出しも拒否されます。",
     "tabNormal": "通常キー",
-    "tabPacket": "紅包のキー"
+    "tabPacket": "紅包のキー",
+    "exportTitle": "クライアント設定として書き出す",
+    "exportCcClaude": "cc-switch（Claude）",
+    "exportCcCodex": "cc-switch（Codex）",
+    "exportZcode": "ZCode",
+    "exportBtn": "書き出す",
+    "exportHint": "クライアントの設定にそのまま貼れるスニペットを生成します。この一度きりのみ——閉じると鍵はハッシュのみとなり再書き出しできません。",
+    "exported": "設定スニペットを生成しました"
   },
   "logs": {
     "cacheShort": "キャッシュ {pct}%",

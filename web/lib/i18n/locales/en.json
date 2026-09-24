@@ -461,7 +461,14 @@
     "creditUsed": "{used} / {quota} credits",
     "modelsUnknown": "No model matches these names (possible typo): {names}. They will not be listed and calls using them are rejected.",
     "tabNormal": "Regular keys",
-    "tabPacket": "From red packets"
+    "tabPacket": "From red packets",
+    "exportTitle": "Export as client config",
+    "exportCcClaude": "cc-switch (Claude)",
+    "exportCcCodex": "cc-switch (Codex)",
+    "exportZcode": "ZCode",
+    "exportBtn": "Export",
+    "exportHint": "Generates a snippet you can paste into the client's config. Available only once — after closing, the key is stored as a hash and cannot be exported again.",
+    "exported": "Config snippet generated"
   },
   "logs": {
     "cacheShort": "cache {pct}%",
