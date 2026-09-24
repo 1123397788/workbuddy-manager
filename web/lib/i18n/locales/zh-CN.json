@@ -1109,7 +1109,8 @@
     "claimLink": "抽奖链接",
     "copyLink": "复制链接",
     "claimLinkHint": "把这个链接发给别人，每个人（按 IP）抽一次",
-    "linkCopied": "链接已复制"
+    "linkCopied": "链接已复制",
+    "claimedTip": "已领 {n} 份，共 {total} 份"
   },
   "claim": {
     "noCode": "链接缺少抽奖码",

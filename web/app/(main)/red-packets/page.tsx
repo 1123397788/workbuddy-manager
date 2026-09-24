@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback, useEffect, useState} from 'react';
-import {Gift, Plus, Copy, Check, Download, Undo2, RefreshCw} from 'lucide-react';
+import {Gift, Plus, Copy, Check, Download, Undo2, Link2, RefreshCw} from 'lucide-react';
 import {useHeartbeat} from '@/lib/use-heartbeat';
 import {notify} from '@/lib/toast';
 import {redPacketApi, errText} from '@/lib/api';
@@ -390,42 +390,69 @@ export default function RedPacketsPage() {
                     {fmtDateTime(p.expires_at)}
                   </TableCell>
                   <TableCell className="pr-4">
-                    {p.revoked ? (
-                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                        {t('redPacket.revokedTag')}
+                    <div className="flex items-center gap-1.5">
+                      {/* 已领取 / 总量。抽奖式红包一眼要看的是这个进度 ——
+                          「还剩几份」比「谁发的」重要得多。 */}
+                      <span
+                        className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground"
+                        title={t('redPacket.claimedTip', {n: p.claimed, total: p.shares})}
+                      >
+                        {p.claimed}/{p.shares}
                       </span>
-                    ) : (
-                      isAdmin && (
-                        // ConfirmDialog 是 **trigger 式**的（开关状态在组件内部），
-                        // 所以把按钮作为 trigger 传进去，不要再在外面维护一份 open。
-                        // stopPropagation 仍然需要：这一列在可点击的 TableRow 里，
-                        // 不拦的话点「收回」会顺带打开详情抽屉。
-                        <span onClick={(e) => e.stopPropagation()}>
-                          <ConfirmDialog
-                            destructive
-                            trigger={
-                              <Button size="sm" variant="ghost"
-                                      className="h-6 rounded-full text-xs">
-                                <Undo2 className="mr-1 h-3 w-3" />{t('redPacket.revoke')}
-                              </Button>
-                            }
-                            title={t('redPacket.confirmRevoke')}
-                            description={t('redPacket.confirmRevokeDesc', {n: p.shares})}
-                            confirmText={t('redPacket.revoke')}
-                            onConfirm={async () => {
-                              try {
-                                const r = await redPacketApi.revoke(p.id);
-                                notify.ok(t('redPacket.revoked'),
-                                          t('redPacket.revokedDetail', {n: r.revoked}));
-                                await load();
-                              } catch (e) {
-                                notify.err(t('redPacket.revokeFailed'), errText(e));
-                              }
-                            }}
-                          />
+
+                      {p.revoked ? (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {t('redPacket.revokedTag')}
                         </span>
-                      )
-                    )}
+                      ) : (
+                        isAdmin && (
+                          <>
+                            {/* 复制抽奖链接。没有码的老红包在启动时会被补一个
+                                （见 redpacket.backfill_codes），所以这里一般都有。 */}
+                            {p.code ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 rounded-full px-2 text-xs"
+                                title={t('redPacket.copyLink')}
+                                onClick={(e) => { e.stopPropagation(); void copyLink(p.code); }}
+                              >
+                                <Link2 className="h-3 w-3" />
+                              </Button>
+                            ) : null}
+
+                            {/* ConfirmDialog 是 **trigger 式**的（开关状态在组件内部），
+                                所以把按钮作为 trigger 传进去，不要再在外面维护一份 open。
+                                stopPropagation 仍然需要：这一列在可点击的 TableRow 里，
+                                不拦的话点「收回」会顺带打开详情抽屉。 */}
+                            <span onClick={(e) => e.stopPropagation()}>
+                              <ConfirmDialog
+                                destructive
+                                trigger={
+                                  <Button size="sm" variant="ghost"
+                                          className="h-6 rounded-full text-xs">
+                                    <Undo2 className="mr-1 h-3 w-3" />{t('redPacket.revoke')}
+                                  </Button>
+                                }
+                                title={t('redPacket.confirmRevoke')}
+                                description={t('redPacket.confirmRevokeDesc', {n: p.shares})}
+                                confirmText={t('redPacket.revoke')}
+                                onConfirm={async () => {
+                                  try {
+                                    const r = await redPacketApi.revoke(p.id);
+                                    notify.ok(t('redPacket.revoked'),
+                                              t('redPacket.revokedDetail', {n: r.revoked}));
+                                    await load();
+                                  } catch (e) {
+                                    notify.err(t('redPacket.revokeFailed'), errText(e));
+                                  }
+                                }}
+                              />
+                            </span>
+                          </>
+                        )
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

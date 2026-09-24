@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 import logging
 
-from . import config, db, security
+from . import config, db, redpacket, security
 from .iputil import client_ip
 from .routers import (
     accounts, anthropic, auth, gateway, keys, logs, models, playground,
@@ -29,6 +29,11 @@ async def lifespan(app: FastAPI):
     db.connect()
     security.load_users()  # 首次启动会自动生成管理员并打印一次密码
     _warn_if_exposed()
+    # 给「抽奖码」这一列上线之前建的红包补码（幂等）：没有码就拼不出抽奖链接，
+    # 等于那些红包只能自己发 key、没法让大家抽。
+    filled = redpacket.backfill_codes()
+    if filled:
+        logger.info('为 %d 个旧红包补上了抽奖码', filled)
     # 后台采集上游自动任务日志（旅行/活跃/签到/保活），容器日志会被重建清掉，
     # 这里解析后落库长期保留，界面才能看到「这趟旅行领了多少积分」
     tasklog.start_collector()

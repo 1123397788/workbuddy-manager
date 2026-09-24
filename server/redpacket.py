@@ -229,6 +229,21 @@ def create_packet(name: str, kind: str, total: float, shares: int,
     }
 
 
+def backfill_codes() -> int:
+    """给没有抽奖码的红包补上，返回补了几个（幂等）。
+
+    抽奖码是本功能后半段才加的列：在那之前建的红包 `code` 是 NULL，而拼不出
+    抽奖链接就等于这份红包只能自己发 key、没法让大家抽。启动时补一次即可。
+
+    **已有的不动**：换一个码等于让已经发出去的链接全部失效。
+    """
+    rows = db.query("SELECT id FROM red_packets WHERE code IS NULL OR code = ''")
+    for r in rows:
+        db.execute('UPDATE red_packets SET code = ? WHERE id = ?',
+                   (secrets.token_urlsafe(16), r['id']))
+    return len(rows)
+
+
 def _models_of(raw: object) -> list[str]:
     """把库里存的 JSON 数组还原成列表；坏数据按空处理，不让它把接口打成 500。
 

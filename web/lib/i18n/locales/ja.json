@@ -1314,7 +1314,8 @@
     "claimLink": "抽選リンク",
     "copyLink": "リンクをコピー",
     "claimLinkHint": "このリンクを配ると、1 人（IP ごと）につき 1 回抽選できます",
-    "linkCopied": "リンクをコピーしました"
+    "linkCopied": "リンクをコピーしました",
+    "claimedTip": "{total} 份のうち {n} 份受け取り済み"
   },
   "claim": {
     "noCode": "リンクに抽選コードがありません",

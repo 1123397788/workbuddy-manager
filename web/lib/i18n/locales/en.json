@@ -1338,7 +1338,8 @@
     "claimLink": "Claim link",
     "copyLink": "Copy link",
     "claimLinkHint": "Share this link — each person (per IP) draws once",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "claimedTip": "{n} of {total} claimed"
   },
   "claim": {
     "noCode": "This link is missing its claim code",

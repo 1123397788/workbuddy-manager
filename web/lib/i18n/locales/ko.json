@@ -1314,7 +1314,8 @@
     "claimLink": "추첨 링크",
     "copyLink": "링크 복사",
     "claimLinkHint": "이 링크를 공유하면 사람마다(IP 기준) 한 번씩 추첨합니다",
-    "linkCopied": "링크를 복사했습니다"
+    "linkCopied": "링크를 복사했습니다",
+    "claimedTip": "{total}개 중 {n}개 수령"
   },
   "claim": {
     "noCode": "링크에 추첨 코드가 없습니다",

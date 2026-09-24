@@ -1314,7 +1314,8 @@
     "claimLink": "抽獎連結",
     "copyLink": "複製連結",
     "claimLinkHint": "把這個連結發給別人，每個人（按 IP）抽一次",
-    "linkCopied": "連結已複製"
+    "linkCopied": "連結已複製",
+    "claimedTip": "已領 {n} 份，共 {total} 份"
   },
   "claim": {
     "noCode": "連結缺少抽獎碼",
