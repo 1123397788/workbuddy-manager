@@ -24,6 +24,11 @@
     "optional": "Optional",
     "refresh": "Refresh"
   },
+  "state": {
+    "loadFailed": "Failed to load data",
+    "loadFailedHint": "Check your network connection or whether the backend service is running, then try again.",
+    "retry": "Retry"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "accounts": "Accounts",

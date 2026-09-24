@@ -24,6 +24,11 @@
     "optional": "選填",
     "refresh": "重新整理"
   },
+  "state": {
+    "loadFailed": "資料載入失敗",
+    "loadFailedHint": "請檢查網路連線或後端服務是否正常，然後重試。",
+    "retry": "重試"
+  },
   "nav": {
     "dashboard": "儀表板",
     "accounts": "帳號",

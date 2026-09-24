@@ -24,6 +24,11 @@
     "optional": "선택 사항",
     "refresh": "새로고침"
   },
+  "state": {
+    "loadFailed": "데이터를 불러오지 못했습니다",
+    "loadFailedHint": "네트워크 연결이나 백엔드 서비스가 정상인지 확인한 후 다시 시도하세요.",
+    "retry": "다시 시도"
+  },
   "nav": {
     "dashboard": "대시보드",
     "accounts": "계정",

@@ -24,6 +24,11 @@
     "optional": "任意",
     "refresh": "更新"
   },
+  "state": {
+    "loadFailed": "データの読み込みに失敗しました",
+    "loadFailedHint": "ネットワーク接続またはバックエンドサービスが正常か確認してから、再試行してください。",
+    "retry": "再試行"
+  },
   "nav": {
     "dashboard": "ダッシュボード",
     "accounts": "アカウント",
