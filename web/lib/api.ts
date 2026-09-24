@@ -75,7 +75,13 @@ http.interceptors.response.use(
       // 这里必须带 basePath：basePath 只自动作用于 next/router 的跳转，
       // 裸的 window.location.href 会跳到域名根路径的 /login 上（通常 404）。
       const loginPath = `${BASE_PATH}/login`;
-      if (!window.location.pathname.startsWith(loginPath)) {
+      const claimPath = `${BASE_PATH}/claim`;
+      const here = window.location.pathname;
+      // **抽奖页要排除在外**：它是公开页（收到红包链接的人没有账号），而根 layout
+      // 里的 AuthProvider 一挂载就会调 /api/me —— 未登录必然 401，于是被这个
+      // 拦截器立刻踢去登录页，用户根本没机会点「开启」。
+      // 这不改变服务端的鉴权（那两个端点本来就是公开的），只是别在前端自己拦自己。
+      if (!here.startsWith(loginPath) && !here.startsWith(claimPath)) {
         window.location.href = loginPath;
       }
     }
