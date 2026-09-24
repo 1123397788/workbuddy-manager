@@ -11,10 +11,11 @@
 #   sudo bash deploy/install.sh --skip-upstream  # 已自备 workbuddy2api
 #   sudo bash APP_DIR=/opt/custom bash deploy/install.sh
 #
-# 上游源码从哪来（二选一）：
-#   UPSTREAM_SRC=<本地目录或 tar.gz>   用本地那份源码，不联网克隆（推荐）
-#   UPSTREAM_REPO=<git 地址>           从 git 拉；原上游仓库已不可访问，
-#                                      需要指向你自己的副本（fork / 私有镜像）
+# 上游源码从哪来（按优先级）：
+#   1) 发布包里自带的 upstream/             下载 Release 包时已内嵌，离线可装
+#   2) UPSTREAM_SRC=<本地目录或 tar.gz>     用你自己那份源码
+#   3) UPSTREAM_REPO=<git 地址>             从 git 拉（原上游仓库已不可访问，
+#                                           需要指向你自己的副本 fork / 镜像）
 #
 # 说明：workbuddy2api 的账号登录（扫码）是交互式的，无法自动化；
 #       安装完成后通过本管理端的「添加账号」扫码即可。
@@ -129,9 +130,20 @@ elif [ -f "${UPSTREAM_DIR}/config.json" ]; then
 else
   info "未检测到上游部署，开始安装到 ${UPSTREAM_DIR}"
 
-  # 上游源码有两种来源。**优先本地源码**：原上游仓库自 2026-09-23 起已不可访问，
-  # 克隆这条路对多数人已经走不通，而本地那份源码（比如你已有的部署、或维护者
-  # 提供的源码包）本来就能直接构建。
+  # 上游源码的来源，按优先级：
+  #   1) UPSTREAM_SRC 显式指定（目录 / .tar.gz / .zip）
+  #   2) **发布包里自带的 upstream/**（Release 包内嵌，离线可装：上游原仓库
+  #      自 2026-09-23 起已不可访问，源码由维护者随包分发）
+  #   3) 目标目录里已有的 .git（老部署，尝试 git pull）
+  #   4) 克隆 UPSTREAM_REPO（需要指向你自己的副本）
+  if [ -z "$UPSTREAM_SRC" ]; then
+    BUNDLED="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/upstream"
+    if [ -f "${BUNDLED}/docker-compose.yml" ]; then
+      UPSTREAM_SRC="$BUNDLED"
+      info "使用发布包内自带的上游源码：${BUNDLED}"
+    fi
+  fi
+
   if [ -n "$UPSTREAM_SRC" ]; then
     [ -e "$UPSTREAM_SRC" ] || die "UPSTREAM_SRC 指向的路径不存在：${UPSTREAM_SRC}"
     info "使用本地源码：${UPSTREAM_SRC}"

@@ -584,8 +584,9 @@ Two other differences from a host install (both surfaced in the UI):
 ### 4. Server deployment (one-click script)
 
 This project depends on the upstream workbuddy2api (account pool and OpenAI-compatible
-API) — **cloning this repo alone will not run**. Point `UPSTREAM_SRC` at a local copy
-(directory or archive): the original repository is gone, see the
+API) — **cloning this repo alone will not run**. The release package **ships the upstream source**
+(the original repo was deleted by its author), so the script installs both. To use
+your own copy instead, see the
 [deployment guide](deploy/README.md#〇上游仓库已不可访问2026-09-23-起).
 A one-click script installs both on a clean machine:
 

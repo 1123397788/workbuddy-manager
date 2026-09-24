@@ -102,3 +102,5 @@ dev/.cache-log
 dev/.shots-cache-log
 # 子路径部署验收（verify_subpath.py）的临时数据
 dev/.subpath
+# 发布包组装自检（check_release_pack.py）的临时现场
+dev/.pack-test

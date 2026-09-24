@@ -12,6 +12,16 @@
   287 个文件，含 `LICENSE`）。它是完整的、可构建的；但原克隆是 blob-less
   部分克隆，**逐版本历史无法完整还原**，所以归档以「单次导入提交」的形式保存，
   不能 checkout 出中间某次提交的源码。
+- **源码怎么到达用户**（**不要**把上游代码提交进本仓库）：公开仓库只放本面板。
+  上游源码走 Release 包：
+  1. 维护者把源码放进归档目录（若收到更新的脚本，覆盖对应文件）；
+  2. `python dev/pack_upstream_src.py <源码目录> -o /tmp/upstream-pack --stamp "本次改了什么"`
+     —— 打成 `workbuddy2api-src.tar.gz`（自动排除 `.git` 与 `config.json`/`auths`/`data`）；
+  3. `gh release upload upstream-src /tmp/upstream-pack/workbuddy2api-src.tar.gz --clobber`
+     —— 覆盖到**固定的载体 Release**（tag `upstream-src`，**必须是 pre-release**：
+     否则它会成为 `releases/latest`，把面板的更新检查带偏）；
+  4. 之后任何一次面板发版，CI 都会把它塞进发布包的 `upstream/`（取不到只告警、不
+     阻断发布），用户装/更新时就用它。
 - **改动上游代码**：直接改本地那份源码（`/opt/workbuddy2api`），
   然后 `docker compose up -d --build`。改的是别人的 MIT 代码，需保留其
   `LICENSE` 与版权声明。

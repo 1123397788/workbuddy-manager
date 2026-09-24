@@ -924,6 +924,42 @@ class UpstreamSourceFallbackTest(unittest.TestCase):
         """源码本来就在目标目录时不要自己复制自己（复用 /opt/workbuddy2api 的典型情形）。"""
         self.assertIn('pwd -P', self.sh, '没有做「同一目录」判断')
 
+    def test_bundled_upstream_is_preferred_and_ordered_first(self) -> None:
+        """发布包自带 `upstream/` 时优先用它，且顺序必须在 git/克隆之前。
+
+        上游源码随 Release 包分发（公开仓库不放上游代码），所以「包里有就用包里
+        的」是**新用户第一次安装**会走的路。顺序错了（比如先试 git clone）会让
+        离线机器白等一次超时，最后还可能失败。
+        """
+        self.assertIn('UPSTREAM_DIR}/docker-compose.yml', self.sh,
+                      '没有检测发布包自带的 upstream/')
+        i_bundled = self.sh.index('BUNDLED=')
+        # 用**安装分支里**那个 elif 作锚点：脚本开头还有一处 [ -d .../.git ] 属于
+        # 「已装过上游，只需确保容器在跑」的分支，拿它比会得到错误的先后（试过）。
+        i_git = self.sh.index('elif [ -d "${UPSTREAM_DIR}/.git" ]')
+        self.assertLess(i_bundled, i_git,
+                        '包内自带的源码要排在「已有 git 目录」之前判断')
+        # 检测到之后必须真的接上：赋给 UPSTREAM_SRC（后面复制/解压那段用的就是它）
+        self.assertIn('UPSTREAM_SRC="$BUNDLED"', self.sh,
+                      '检测到了包内源码却没接到 UPSTREAM_SRC —— 等于没检测')
+
+    def test_release_workflow_embeds_upstream_source(self) -> None:
+        """发布流程要把上游源码塞进包里，且**取不到时不阻断发布**。
+
+        上游原仓库已删除、公开仓库又不放它的代码，所以「随包分发」是用户拿到源码
+        的唯一常规渠道。两步都不能少：
+          · 从固定的载体 Release 取（tag upstream-src，标 pre-release 才行——
+            否则它会成为 releases/latest，把面板的更新检查带偏）；
+          · 取不到只记 warning 继续打包（否则一次网络抖动就让整个发布失败）。
+        """
+        import yaml
+        wf = (_ROOT / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
+        yaml.safe_load(wf)   # 先确保 YAML 没写坏
+        self.assertIn('releases/download/upstream-src/workbuddy2api-src.tar.gz', wf,
+                      '没有从载体 Release 取上游源码')
+        self.assertIn("$STAGE/upstream", wf, '取回来的源码没有放进发布目录')
+        self.assertIn('::warning::', wf, '取不到源码时会直接失败 —— 应该只告警')
+
     def test_clone_failure_lists_ways_out(self) -> None:
         """克隆失败要把三条退路写清楚——否则用户只看到 git 的 not found。"""
         block = self.sh[self.sh.find('克隆上游仓库失败'):]

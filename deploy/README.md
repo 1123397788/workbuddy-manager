@@ -18,35 +18,46 @@
 | **新装** | 克隆那一步会失败 —— 改用下面的「自备源码」方式 |
 | **更新上游代码** | 原地址拿不到新代码了（上游已停更）。要改代码就改本地那份源码，或换成你自己的副本 |
 
-### 自备源码（三种方式，任选其一）
+### 源码从哪来：**下载的 Release 包里已经带了**
+
+最新版本的 Release 包内含 `upstream/`（上游源码），装的时候直接用，
+**不需要联网取任何外部源码**：
 
 ```bash
-# 1) 复用已有的上游目录（最省事：机器上已经有 /opt/workbuddy2api）
-sudo UPSTREAM_SRC=/opt/workbuddy2api bash deploy/install.sh
+wget https://github.com/ithtelab/workbuddy-manager/releases/latest/download/workbuddy-manager-<版本>.tar.gz
+tar xzf workbuddy-manager-*.tar.gz && cd workbuddy-manager-*
+sudo bash deploy/install.sh          # 自动使用包内的 upstream/
+```
 
-# 2) 用自己的副本（fork / 私有镜像 / 你保存的源码包）
-sudo UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git bash deploy/install.sh
+要改用你自己那份源码（或机器上已有的 `/opt/workbuddy2api`），按下面的优先级覆盖：
+
+```bash
+# 1) 显式指定本地源码（目录 / .tar.gz / .zip 都行）
+sudo UPSTREAM_SRC=/opt/workbuddy2api bash deploy/install.sh
 sudo UPSTREAM_SRC=/path/to/workbuddy2api-<版本>.tar.gz bash deploy/install.sh
+
+# 2) 从你自己的 git 副本拉
+sudo UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git bash deploy/install.sh
 
 # 3) 上游已手工装好，只想装面板
 sudo bash deploy/install.sh --skip-upstream
 ```
 
-`UPSTREAM_SRC` 支持三种形态：源码目录、`.tar.gz`、`.zip`（复制或解压到
-`UPSTREAM_DIR`，默认 `/opt/workbuddy2api`）。
+优先级：`UPSTREAM_SRC` → 发布包自带的 `upstream/` → 目标目录里已有的 git 仓库
+→ `UPSTREAM_REPO` 克隆。`UPSTREAM_DIR` 默认 `/opt/workbuddy2api`。
 
 ### 以后怎么更新上游代码
 
-上游已停更，没有 `git pull` 可拉。更新方式是**替换源码目录里的文件**再重建：
+用面板里的**一键更新**即可 —— 它会把包内那份上游源码同步进 `/opt/workbuddy2api`
+（只增改，不动 `config.json` / `auths/` / `data/`），**有变化才重建容器**。
+上游已停更，没有 `git pull` 可拉；要改代码请改本地那份（或用 `UPSTREAM_SRC`
+覆盖一份新的），再：
 
 ```bash
-cd /opt/workbuddy2api && docker compose up -d --build     # 用当前源码重建
-# 换一份源码：把新源码覆盖到该目录（保留 config.json / auths / data）后再执行上面这条
+cd /opt/workbuddy2api && docker compose up -d --build
 ```
 
 这三样务必保留：`config.json`（含 `api_key`）、`auths/`（账号授权）、`data/`。
-面板的「更新上游」仍可用 —— 拉不到新代码时它会**如实说明原因并沿用现有源码**
-继续重建，不会把你的服务弄停。
 
 ### 许可
 

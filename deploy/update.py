@@ -359,6 +359,80 @@ def _compose_looks_customized(rep: Reporter) -> bool:
         return False
 
 
+def _sync_bundled_upstream(src: Path, rep: Reporter) -> int:
+    """把发布包内自带的上游源码同步进 `UPSTREAM_DIR`（保留用户数据与定制）。
+
+    返回**改动文件数**（改写的 + 新增的）；0 表示没变或本次不适用——
+    调用方据此决定要不要重建上游容器（源码没变就不该白等一次构建）。
+
+    上游原仓库已被删除，源码随面板的 Release 包分发（包内 `upstream/`）。
+    在这里同步而不是在 `update_upstream` 里另下载一份，是因为**包是验过签的**：
+    上游代码由此也落在签名信任链里；而 `update_upstream` 的 git 拉取没有这层保证。
+
+    三条克制：
+      · 只处理**非 git** 的上游目录 —— git 部署有自己的通道（拉远端），那份源码
+        可能比包内的新，拿包内的覆盖它是倒退；
+      · 顶层 `config.json` / `auths/` / `data/` 一律不动（api_key、账号凭据、运行数据）；
+      · 只增改、不删除：包里没有的文件保留原地（宁可留旧文件，也不误删用户的）。
+    """
+    incoming = src / 'docker-compose.yml'
+    if not incoming.is_file():
+        rep.log('本次包内未含上游源码（upstream/），跳过上游代码同步')
+        return 0
+    if not (UPSTREAM_DIR / 'docker-compose.yml').is_file():
+        rep.log(f'{UPSTREAM_DIR} 里还没有上游源码，跳过同步'
+                '（首次安装上游请用 deploy/install.sh，它会用包内的 upstream/）', 'warn')
+        return 0
+    if (UPSTREAM_DIR / '.git').is_dir():
+        rep.log('上游是 git 部署：由上面的 git 流程更新，不覆盖包内源码')
+        return 0
+
+    # 用户对 compose 的定制（加网络 / 改卷 / 改端口之外的东西）要保住。
+    # 没有 git 可比，就拿「包内那份」当基准：两边都归一化掉我们的端口收敛，
+    # 不一致就说明本地有额外改动（issue #28 的情形）。
+    local_compose = UPSTREAM_DIR / 'docker-compose.yml'
+    keep_compose: str | None = None
+    try:
+        local_text = local_compose.read_text(encoding='utf-8')
+        if _port_converged(local_text).strip() != _port_converged(
+                incoming.read_text(encoding='utf-8')).strip():
+            keep_compose = local_text
+            rep.log('检测到 docker-compose.yml 有本地定制，同步后原样恢复')
+    except OSError:
+        pass
+
+    skip_top = {'config.json', 'auths', 'data'}
+    changed = 0
+    added = 0
+    for f in sorted(src.rglob('*')):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(src)
+        if rel.parts[0] in skip_top or '.git' in rel.parts or '__pycache__' in rel.parts:
+            continue
+        dst = UPSTREAM_DIR / rel
+        try:
+            if dst.is_file():
+                if dst.read_bytes() == f.read_bytes():
+                    continue
+                changed += 1
+            else:
+                added += 1
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(f, dst)
+            shutil.copymode(f, dst)
+        except OSError as exc:
+            rep.log(f'  同步 {rel} 失败：{exc}', 'warn')
+
+    if keep_compose is not None:
+        local_compose.write_text(keep_compose, encoding='utf-8')
+    if changed or added:
+        rep.log(f'上游源码已随包更新：改写 {changed} 个、新增 {added} 个文件')
+    else:
+        rep.log('上游源码与包内一致，无需改动')
+    return changed + added
+
+
 def _fetch_failed_hint(out: str, pinned: str = '') -> str:
     """拉取上游失败时给用户的话——分清「远端没了」与「网络/引用有问题」。
 
@@ -489,8 +563,25 @@ def update_upstream(rep: Reporter) -> None:
     # 4) 恢复安全基线
     enforce_local_bind(rep)
 
-    # 5) 构建前预检：上游偶尔会漏改 Dockerfile（删了文件却仍在 COPY），
-    #    提前查出来，避免只看到 docker 那串难懂的报错
+    # 5) 预检 + 重建 + 等待就绪（见 rebuild_upstream）
+    rebuild_upstream(rep)
+
+    # 6) 清版本检测缓存
+    #
+    # 缓存里存的是「更新前」查到的远端最新提交；不清的话，界面会把**已经装好的
+    # 这个版本**当成新版本继续提示「上游有更新」，一直到缓存 6 小时过期为止
+    # （用户报过这个问题：明明更新到最新了，面板还是一直说有更新）。
+    # 管理端更新那条路径早就清了，上游这条一直漏着。
+    _clear_version_cache(rep)
+
+
+def rebuild_upstream(rep: Reporter) -> None:
+    """预检 Dockerfile → 重建上游容器 → 等待就绪。
+
+    抽出来是因为它有**两个调用点**：
+      · 常规的上游更新（上面那段 git 流程之后）；
+      · 面板更新时同步了包内自带的上游源码之后（源码变了必须重建才生效）。
+    """
     missing = _missing_copy_sources()
     if missing:
         rep.log('构建预检未通过：Dockerfile 引用了不存在的文件', 'error')
@@ -539,14 +630,6 @@ def update_upstream(rep: Reporter) -> None:
         rep.log('上游已就绪')
     else:
         rep.log('上游未在预期时间内就绪，请查看容器日志', 'warn')
-
-    # 7) 清版本检测缓存
-    #
-    # 缓存里存的是「更新前」查到的远端最新提交；不清的话，界面会把**已经装好的
-    # 这个版本**当成新版本继续提示「上游有更新」，一直到缓存 6 小时过期为止
-    # （用户报过这个问题：明明更新到最新了，面板还是一直说有更新）。
-    # 管理端更新那条路径早就清了，上游这条一直漏着。
-    _clear_version_cache(rep)
 
 
 def _clear_version_cache(rep: Reporter) -> None:
@@ -1011,6 +1094,21 @@ def update_manager(rep: Reporter) -> None:
             if src.is_file():
                 shutil.copyfile(src, INSTALL_DIR / name)
                 rep.log(f'同步 {name}')
+
+        # ── 上游源码随包更新 ─────────────────────────────────────────
+        # 上游原仓库已删除，源码由本项目随发布包分发（包内 upstream/）。放在这里
+        # 而不是 update_upstream 里另下一份，是因为**本包是验过签的**：上游代码
+        # 由此落在签名信任链内；另下一份则没有这层保证。
+        # 只有真的改动了才重建容器——上游源码在两版之间多数没变，白重建一次要等
+        # 好几分钟，还会把上游短暂停掉。
+        changed = _sync_bundled_upstream(new_root / 'upstream', rep)
+        if changed:
+            # 包内那份 compose 是**上游原样**（`7863:7863`，公网可达），而端口收敛
+            # 是在 update_upstream 里做的——那一步在本函数之前。同步会把它盖掉，
+            # 所以这里必须**重新施加**安全基线，否则上游会重新暴露到 0.0.0.0。
+            enforce_local_bind(rep)
+            rep.log('上游源码有变化，重建容器使其生效…')
+            rebuild_upstream(rep)
 
     # 4) 依赖有变化则重装
     req = INSTALL_DIR / 'server' / 'requirements.txt'

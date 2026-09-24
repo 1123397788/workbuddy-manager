@@ -494,8 +494,9 @@ docker pull ghcr.io/<你的用户名>/workbuddy-manager-multiarch:latest
 ### 四、部署到服务器（一键脚本）
 
 本项目依赖上游 workbuddy2api（账号池与 OpenAI 兼容接口），**单独 clone 本仓库无法运行**。
-上游源码用 `UPSTREAM_SRC` 指定（本地目录或压缩包）——原仓库已不可访问，
-详见[部署指南](deploy/README.md#〇上游仓库已不可访问2026-09-23-起)。一键脚本会装好两者：
+**发布包里已自带上游源码**（原仓库已被作者删除，源码由本项目随包分发），
+一键脚本会装好两者；要改用自己那份源码见
+[部署指南](deploy/README.md#〇上游仓库已不可访问2026-09-23-起)：
 
 ```bash
 # 推荐：用 Release 包（内含已构建的前端，无需 Node.js）
