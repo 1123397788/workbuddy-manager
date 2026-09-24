@@ -162,6 +162,11 @@ const RULES: LineRule[] = [
   [runner('query (\\S+)\\((\\d+)/(\\d+)\\) -> 已完成/已领，跳过'), (m) =>
     tStatic('tasks.runLogAlreadyDone', {
       uid: m[1], code: m[2], status: m[3], cur: m[4], target: m[5]})],
+  // 上游 2026-09-24（06878fd / 1580a86，成长任务续作）新增：任务还没到上线时间。
+  // 解锁时间是数据（可能是 "?"）——用 `(.+?)` 而不是 `(\S+)`：上游给的是时间戳
+  // 形态，含空格时 `\S+` 会匹配不上，那一行就退回中文原文（不报错，只是没翻译）。
+  [runner('query locked（解锁 (.+?)）-> 未到上线时间，跳过'), (m) =>
+    tStatic('tasks.runLogTaskLocked', {uid: m[1], code: m[2], unlock: m[3]})],
   [runner('query (\\S+) -> school 未映射\\(人工/未知\\)，skip'), (m) =>
     tStatic('tasks.runLogSchoolUnmapped', {uid: m[1], code: m[2], status: m[3]})],
   [runner('report (\\S+) code=(\\S+) 前置解锁'), (m) =>

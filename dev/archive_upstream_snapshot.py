@@ -13,7 +13,7 @@
 部分克隆——**历史 blob 大多缺失且再也拉不回来**，但 HEAD 快照（287 个文件）完整。
 产物：
   <归档>/snapshot/           HEAD 快照 + 新建的 git 仓库（可 push 成新家）
-  <归档>/partial-clone.git/  原部分克隆的 .git（提交元数据 + 已取到的 blob）
+  <归档>/repo.git/           克隆的 .git（完整克隆时含全部历史对象）
   <归档>/PROVENANCE.md       来源说明（MIT 要求保留版权声明）
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from pathlib import Path
 SRC = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('/tmp/upcheck2')
 DEST = Path('D:/Leo/桌面/workbuddy2api-archive')
 UPSTREAM = 'https://github.com/Sliverkiss/workbuddy2api'
-FINAL = '9a26ae7'
+FINAL = ''   # 运行时从克隆里读（见 main）
 ARCHIVED_ON = '2026-09-23'
 
 
@@ -61,6 +61,8 @@ def main() -> int:
         return 2
 
     _force_rmtree(DEST)
+    global FINAL
+    FINAL = run(['git', 'rev-parse', '--short', 'HEAD'], cwd=SRC).strip()
     snap = DEST / 'snapshot'
     snap.mkdir(parents=True)
 
@@ -75,11 +77,20 @@ def main() -> int:
     tar.unlink()
 
     # 2) 原部分克隆的 .git 一并留着
-    shutil.copytree(SRC / '.git', DEST / 'partial-clone.git')
+    shutil.copytree(SRC / '.git', DEST / 'repo.git')
 
     files = [p for p in snap.rglob('*') if p.is_file()]
-    print(f'快照文件数: {len(files)}')
-    assert len(files) == 287, f'快照文件数不是 287（实得 {len(files)}）——先查清再继续'
+    # 判据是「快照 == HEAD 的文件数」，不是某个写死的数字：上游每次增删文件都会
+    # 让写死的数字失效（第一次就撞上了：上游删掉一个 CI 文件，287 变 286），
+    # 而真正要保证的是**一个都不少**。
+    tree_count = len(run(['git', 'ls-tree', '-r', 'HEAD'], cwd=SRC).strip().splitlines())
+    print(f'快照文件数: {len(files)}（HEAD 树里有 {tree_count} 个）')
+    assert len(files) == tree_count, (
+        f'快照文件数与 HEAD 不符（快照 {len(files)} / HEAD {tree_count}）——先查清再继续')
+    # 部分克隆会写这个配置；没有这个键时 git 以 1 退出（不是错误，是「没设」）
+    _cfg = subprocess.run(['git', 'config', '--get', 'remote.origin.partialclonefilter'],
+                          cwd=SRC, capture_output=True, text=True)
+    partial = _cfg.stdout.strip() if _cfg.returncode == 0 else ''
 
     # 3) 快照目录初始化成正常仓库：可直接 push 成新家
     run(['git', 'init', '-q', '-b', 'main'], cwd=snap)
@@ -93,6 +104,10 @@ def main() -> int:
          f'原项目版权归 Sliverkiss，MIT 许可（见 LICENSE）。'], cwd=snap)
     print('新仓库首个提交:', run(['git', 'log', '--oneline', '-1'], cwd=snap).strip())
 
+    kind = '完整克隆（含逐版本历史）' if not partial else 'blob-less 部分克隆'
+    note = ('任何历史提交都能 checkout 出来。'
+            if not partial else
+            '历史文件内容大多未落盘、无法还原，只有提交信息可用（远端已不可达）。')
     (DEST / 'PROVENANCE.md').write_text(
         f"""# workbuddy2api 源码归档（来源说明）
 
@@ -105,14 +120,14 @@ def main() -> int:
 | 目录 | 内容 |
 |---|---|
 | `snapshot/` | **HEAD 的完整源码**（287 个文件）+ 新建 git 仓库（单次导入提交），可直接 push 成新的上游仓库 |
-| `partial-clone.git/` | 原克隆的 `.git`：493 条提交元数据与提交信息，以及当初取到过的那部分文件内容 |
+| `repo.git/` | 克隆的 `.git`：完整克隆时可 checkout 任意历史提交；部分克隆时只含取到过的那部分内容 |
 
-## 已知限制
+## 完整度
 
-原克隆是 **blob-less 部分克隆**（`--filter=blob:none`）：历史上绝大多数**文件内容**
-从未落盘、按需从远端拉取。远端消失后这些内容拿不回来，所以「逐版本历史」只剩提交
-信息，无法 checkout 出中间某次提交的源码。`snapshot/` 里的 HEAD 快照是完整的
-（逐文件校验过），构建与继续开发不受影响。
+本次归档的克隆类型：**{kind}**。{note}
+
+`snapshot/` 里的 HEAD 快照始终是完整的（逐文件与 HEAD 树比对过），构建与继续
+开发不受影响。
 
 ## 许可
 

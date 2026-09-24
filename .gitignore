@@ -104,3 +104,6 @@ dev/.shots-cache-log
 dev/.subpath
 # 发布包组装自检（check_release_pack.py）的临时现场
 dev/.pack-test
+# 红包抽奖页验收（verify_claim_ui.py）的临时数据与截图
+dev/.claim-ui
+dev/.shots-claim-ui

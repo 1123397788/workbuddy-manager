@@ -34,6 +34,27 @@ def _src(rel: str) -> str:
     return (_WEB / rel).read_text(encoding='utf-8')
 
 
+
+class PublicPageRedirectTest(unittest.TestCase):
+    """公开页不能被全局 401 处理踢去登录页（评审实测到的真问题）。
+
+    红包抽奖页 `/claim` 是给**没有账号**的人看的（收到链接的同事朋友）。它会加载
+    `/api/me`（AuthProvider 校验一次会话），未登录时 401 —— 而 `lib/api.ts` 的全局
+    401 处理会直接把人送到 `/login`。结果是：这一页在匿名访客眼里就是登录页，
+    「不注册也能领」直接落空。
+    """
+
+    def test_api_client_exempts_public_pages(self) -> None:
+        src = _src('lib/api.ts')
+        self.assertIn('publicPrefixes', src, '没有公开页白名单，401 会把访客踢去登录页')
+        self.assertIn('${BASE_PATH}/claim', src, '抽奖页不在白名单里')
+
+    def test_claim_page_lives_outside_the_guarded_layout(self) -> None:
+        """`(main)/` 那组布局会校验登录态，公开页必须放在它外面。"""
+        self.assertTrue((_WEB / 'app' / 'claim' / 'page.tsx').is_file())
+        self.assertFalse((_WEB / 'app' / '(main)' / 'claim').exists(),
+                         '抽奖页挪进了 (main)/，匿名访客会被挡在登录页')
+
 class MetadataPathsTest(unittest.TestCase):
     """`metadata` 里的图标 / 清单地址必须带前缀（评审抓到的那处漏网）。"""
 

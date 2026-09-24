@@ -14,8 +14,8 @@
 # 上游源码从哪来（按优先级）：
 #   1) 发布包里自带的 upstream/             下载 Release 包时已内嵌，离线可装
 #   2) UPSTREAM_SRC=<本地目录或 tar.gz>     用你自己那份源码
-#   3) UPSTREAM_REPO=<git 地址>             从 git 拉（原上游仓库已不可访问，
-#                                           需要指向你自己的副本 fork / 镜像）
+#   3) UPSTREAM_REPO=<git 地址>             从 git 拉（默认地址不可用，
+#                                           请指向你自己的副本 fork / 镜像）
 #
 # 说明：workbuddy2api 的账号登录（扫码）是交互式的，无法自动化；
 #       安装完成后通过本管理端的「添加账号」扫码即可。
@@ -133,7 +133,7 @@ else
   # 上游源码的来源，按优先级：
   #   1) UPSTREAM_SRC 显式指定（目录 / .tar.gz / .zip）
   #   2) **发布包里自带的 upstream/**（Release 包内嵌，离线可装：上游原仓库
-  #      自 2026-09-23 起已不可访问，源码由维护者随包分发）
+  #      源码随本项目的发布包分发）
   #   3) 目标目录里已有的 .git（老部署，尝试 git pull）
   #   4) 克隆 UPSTREAM_REPO（需要指向你自己的副本）
   if [ -z "$UPSTREAM_SRC" ]; then
@@ -181,13 +181,12 @@ else
     if ! git clone --depth 1 "$UPSTREAM_REPO" "$UPSTREAM_DIR"; then
       die "克隆上游仓库失败。
 
-  上游原仓库（Sliverkiss/workbuddy2api）自 2026-09-23 起已不可访问，默认地址
-  已经克隆不下来。请改用下面任一方式后重跑：
+  默认的上游地址已经克隆不下来。请改用下面任一方式后重跑：
 
     # 1) 用本地那份源码（你已有部署时，就在 UPSTREAM_DIR，例如 /opt/workbuddy2api）
     sudo UPSTREAM_SRC=/opt/workbuddy2api bash deploy/install.sh
 
-    # 2) 用你自己的副本（fork 或私有镜像）
+    # 2) 用你自己的副本（fork / 自有镜像）
     sudo UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git bash deploy/install.sh
 
     # 3) 已经手工装好上游，只是让本脚本跳过

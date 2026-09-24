@@ -170,18 +170,26 @@ class UpstreamRemoteGoneTest(unittest.TestCase):
     ]
 
     def test_repo_gone_is_named_as_such(self) -> None:
+        """远端拿不到代码时：说清「源码从发布包来」这条出路，且**不把人往网络上引**。
+
+        判据盯的是**实质**而不是某四个字：措辞会随文案调整（本轮就把「已不可访问」
+        改成了中性的「远端仓库取不到代码」），但「出路要说清、别甩锅网络」这两条不变。
+        """
         for out in self.GONE:
             with self.subTest(out=out.splitlines()[0] if out else ''):
                 hint = worker._fetch_failed_hint(out)
-                self.assertIn('已不可访问', hint)
                 self.assertIn('WB_UPSTREAM_REPO', hint, '要给出可操作的出路')
+                self.assertTrue('发布包' in hint or '包内' in hint,
+                                '要说清源码随发布包分发这条正路')
+                self.assertNotIn('网络', hint, '这不是网络问题，别让人去查网络')
 
     def test_network_failure_is_not_blamed_on_the_missing_repo(self) -> None:
-        """网络、超时这类失败不能误报成「仓库已删除」——那会把排查带偏。"""
+        """网络、超时这类失败不能误报成「远端没了」——那会把排查带偏。"""
         for out in self.OTHER:
             with self.subTest(out=out):
                 hint = worker._fetch_failed_hint(out)
-                self.assertNotIn('已不可访问', hint)
+                self.assertNotIn('发布包', hint)
+                self.assertIn('网络', hint, '网络类失败要如实说是网络')
 
     def test_pinned_target_is_mentioned(self) -> None:
         hint = worker._fetch_failed_hint(self.GONE[1], 'v1.2.3')
@@ -189,7 +197,7 @@ class UpstreamRemoteGoneTest(unittest.TestCase):
 
 
 class BundledUpstreamSyncTest(unittest.TestCase):
-    """面板更新时同步包内自带的上游源码（上游原仓库已删除，源码随 Release 分发）。
+    """面板更新时同步包内自带的上游源码（上游公开地址已不可用，源码随包分发）。
 
     这里钉的是三条**不能错**的性质：
 

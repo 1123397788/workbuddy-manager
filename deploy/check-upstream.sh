@@ -28,7 +28,7 @@ if ! CLONE_OUT="$(git clone --quiet --filter=blob:none --no-checkout "$UPSTREAM_
   # 误判成「仓库没了」会让人跳过本该做的检查。
   case "$CLONE_OUT" in
     *Repositor*"not found"* | *404*)
-      echo "[—] 上游仓库已不可访问（$UPSTREAM_REPO）——原仓库自 2026-09-23 起已删除。"
+      echo "[—] 上游仓库不可访问（$UPSTREAM_REPO）——自 2026-09-23 起该地址不再可用。"
       echo "    这一步从此不再需要：上游已停更，不必再核对新提交，直接发版即可。"
       echo "    （若你已把上游迁到自己的副本，可用 UPSTREAM_REPO=<地址> 指过来，"
       echo "      本脚本会继续按老规矩检查。）"

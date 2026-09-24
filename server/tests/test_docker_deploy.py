@@ -946,7 +946,7 @@ class UpstreamSourceFallbackTest(unittest.TestCase):
     def test_release_workflow_embeds_upstream_source(self) -> None:
         """发布流程要把上游源码塞进包里，且**取不到时不阻断发布**。
 
-        上游原仓库已删除、公开仓库又不放它的代码，所以「随包分发」是用户拿到源码
+        上游源码不放进本仓库，所以「随包分发」是用户拿到源码
         的唯一常规渠道。两步都不能少：
           · 从固定的载体 Release 取（tag upstream-src，标 pre-release 才行——
             否则它会成为 releases/latest，把面板的更新检查带偏）；

@@ -72,10 +72,19 @@ http.interceptors.response.use(
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       // 会话失效：清掉缓存的登录态，避免仍显示管理员入口
       window.sessionStorage.removeItem('wb-me');
+      // **公开页不跳登录页**：红包抽奖页就是给没账号的人看的（同事朋友收到链接
+      // 打开），它自己不需要登录；而这一页也会加载 /api/me（AuthProvider 会校验
+      // 一次会话），401 一来就把人踢去登录页 —— 那正是「不注册也能领」的反面。
+      // 这类页面列在这里，将来再加公开页时一并加进来。
+      const publicPrefixes = [`${BASE_PATH}/claim`];
+      const path = window.location.pathname;
+      if (publicPrefixes.some((p) => path.startsWith(p))) {
+        return Promise.reject(error);
+      }
       // 这里必须带 basePath：basePath 只自动作用于 next/router 的跳转，
       // 裸的 window.location.href 会跳到域名根路径的 /login 上（通常 404）。
       const loginPath = `${BASE_PATH}/login`;
-      if (!window.location.pathname.startsWith(loginPath)) {
+      if (!path.startsWith(loginPath)) {
         window.location.href = loginPath;
       }
     }

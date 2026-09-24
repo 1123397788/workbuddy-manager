@@ -8,10 +8,9 @@ A web frontend for [`workbuddy2api`](https://github.com/Sliverkiss/workbuddy2api
 bulk account onboarding via QR code, automatic daily check-in, API key distribution,
 IP access control, request logs and usage stats — all in one panel.
 
-> The upstream repository has been unavailable since 2026-09-23 (deleted by its
-> author); this project continues under the upstream MIT licence. Existing
-> deployments are unaffected — for reinstall/migration, see the
-> [deployment guide](deploy/README.md#〇上游仓库已不可访问2026-09-23-起).
+> The upstream workbuddy2api source **ships inside this project's release package**
+> (MIT). Existing deployments are unaffected — for reinstall/migration, see the
+> [deployment guide](deploy/README.md#〇上游源码从哪来随发布包分发).
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
@@ -584,10 +583,9 @@ Two other differences from a host install (both surfaced in the UI):
 ### 4. Server deployment (one-click script)
 
 This project depends on the upstream workbuddy2api (account pool and OpenAI-compatible
-API) — **cloning this repo alone will not run**. The release package **ships the upstream source**
-(the original repo was deleted by its author), so the script installs both. To use
-your own copy instead, see the
-[deployment guide](deploy/README.md#〇上游仓库已不可访问2026-09-23-起).
+API) — **cloning this repo alone will not run**. The release package **ships the upstream source**, so the script installs both.
+To use your own copy instead, see the
+[deployment guide](deploy/README.md#〇上游源码从哪来随发布包分发).
 A one-click script installs both on a clean machine:
 
 ```bash
@@ -902,8 +900,8 @@ workbuddy-manager/
 
 > Please include the version and error logs, and **remove any keys or tokens first**.
 > For issues with the upstream workbuddy2api itself, use
-> [this repository](https://github.com/ithtelab/workbuddy-manager/issues) — the original
-> upstream repo is gone, and its source is now maintained here.
+> [this repository](https://github.com/ithtelab/workbuddy-manager/issues) — the upstream
+> source ships with our releases.
 
 ### Release process
 
@@ -958,8 +956,8 @@ release notes, and creates a Release with the archives attached.
 - [**linux-do/cdk**](https://github.com/linux-do/cdk) (MIT) — design tokens and floating
   dock component; this project's UI follows its visual language
 - [**Sliverkiss/workbuddy2api**](https://github.com/Sliverkiss/workbuddy2api) — the account
-  pool and OpenAI-compatible proxy underneath (MIT; its repository became unavailable
-  on 2026-09-23, and this project continues maintaining the source)
+  pool and OpenAI-compatible proxy underneath (MIT; its source is distributed with
+  this project's releases)
 - [**lbjlaq/Antigravity-Manager**](https://github.com/lbjlaq/Antigravity-Manager) — feature
   reference for the console
 

@@ -365,7 +365,7 @@ def _sync_bundled_upstream(src: Path, rep: Reporter) -> int:
     返回**改动文件数**（改写的 + 新增的）；0 表示没变或本次不适用——
     调用方据此决定要不要重建上游容器（源码没变就不该白等一次构建）。
 
-    上游原仓库已被删除，源码随面板的 Release 包分发（包内 `upstream/`）。
+    上游仓库的公开地址已不可用，源码随面板的 Release 包分发（包内 `upstream/`）。
     在这里同步而不是在 `update_upstream` 里另下载一份，是因为**包是验过签的**：
     上游代码由此也落在签名信任链里；而 `update_upstream` 的 git 拉取没有这层保证。
 
@@ -448,10 +448,10 @@ def _fetch_failed_hint(out: str, pinned: str = '') -> str:
             or 'could not read from remote repository' in low)
     target = f'上游 {pinned}' if pinned else '上游'
     if gone:
-        return (f'{target}的远端仓库已不可访问（原仓库 Sliverkiss/workbuddy2api 已删除）。\n'
-                '  本地源码不受影响，本次沿用它继续。以后要更新上游代码，请指向你自己的副本：\n'
-                '    WB_UPSTREAM_REPO=https://github.com/<你的账号>/workbuddy2api.git\n'
-                '  或直接手工更新源码目录（见 deploy/README.md 的「上游仓库已不可访问」）。')
+        return (f'{target}的远端仓库取不到代码（发布包分发的那份不受影响）。\n'
+                '  本次沿用现有源码继续。要更新上游代码：管理端一键更新会带上包内那份；\n'
+                '  也可以把 WB_UPSTREAM_REPO 指向你自己的副本，或用 UPSTREAM_SRC 换一份源码\n'
+                '  （见 deploy/README.md 的「上游源码从哪来」）。')
     return (f'{target}拉取失败（提交/标签是否存在？网络是否正常？）'
             + (f'：{out.strip()[:200]}' if out.strip() else ''))
 
@@ -460,7 +460,8 @@ def update_upstream(rep: Reporter) -> None:
     rep.step('更新上游 workbuddy2api')
 
     if not (UPSTREAM_DIR / '.git').is_dir():
-        rep.log(f'{UPSTREAM_DIR} 不是 git 仓库，跳过上游更新', 'warn')
+        rep.log(f'{UPSTREAM_DIR} 是随包分发的上游（不是 git 仓库）：'
+                '代码随管理端一起更新，本次不单独更新上游')
         return
 
     which = shutil.which('git')
@@ -523,7 +524,7 @@ def update_upstream(rep: Reporter) -> None:
         if rc != 0:
             # 拉不到不致命：下面会沿用现有代码继续重建容器（本地源码是好的）。
             # 但**原因要如实说**——原先一律写「网络问题？」，而上游原仓库
-            # 2026-09-23 起已删除，用户照那句话去查网络只会白费功夫。
+            # 2026-09-23 起不再可用，用户照那句话去查网络只会白费功夫。
             rep.log(_fetch_failed_hint(out), 'warn')
         branch = 'master'
         rc, out = run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=UPSTREAM_DIR, rep=rep, check=False)
@@ -1096,7 +1097,7 @@ def update_manager(rep: Reporter) -> None:
                 rep.log(f'同步 {name}')
 
         # ── 上游源码随包更新 ─────────────────────────────────────────
-        # 上游原仓库已删除，源码由本项目随发布包分发（包内 upstream/）。放在这里
+        # 上游仓库的公开地址已不可用，源码随本项目的发布包分发（包内 upstream/）。放在这里
         # 而不是 update_upstream 里另下一份，是因为**本包是验过签的**：上游代码
         # 由此落在签名信任链内；另下一份则没有这层保证。
         # 只有真的改动了才重建容器——上游源码在两版之间多数没变，白重建一次要等

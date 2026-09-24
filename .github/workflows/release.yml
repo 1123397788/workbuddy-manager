@@ -101,8 +101,8 @@ jobs:
           # 都拿得到更新日志，避免界面报「未找到更新日志文件」。
           cp CHANGELOG.md "$STAGE/server/CHANGELOG.md"
           # ── 上游源码随包分发 ─────────────────────────────────────────
-          # 上游原仓库已被删除，且**本项目的公开仓库不放上游代码**（不是我们的
-          # 代码）。用户要能装，所以源码从固定的载体 Release（tag upstream-src，
+          # 上游源码不放进本仓库（不是我们的代码），其公开地址也已不可用。
+          # 用户要能装，所以源码从固定的载体 Release（tag upstream-src，
           # 标为 pre-release 以免影响 releases/latest）取回来塞进包里：
           #   · 新装：install.sh 见到 upstream/ 直接用（离线可装）
           #   · 升级：update.py 把它同步进上游目录（保留 config/auths/data）

@@ -1,7 +1,8 @@
 # 发布流程（维护者手册）
 
-上游 `workbuddy2api` 自 **2026-09-23** 起已不可访问（原仓库
-`github.com/Sliverkiss/workbuddy2api` 被删除）。**它停更了，我们接着运营。**
+上游 `workbuddy2api` 的**公开地址自 2026-09-23 起不可用**。维护者手上保留着完整的
+源码副本，继续维护；**不要把上游代码提交进本仓库，也不要另开公开镜像** ——
+用户侧的源码来自我们的 Release 包（见下）。
 
 ## 上游停更之后
 
@@ -12,9 +13,9 @@
   287 个文件，含 `LICENSE`）。它是完整的、可构建的；但原克隆是 blob-less
   部分克隆，**逐版本历史无法完整还原**，所以归档以「单次导入提交」的形式保存，
   不能 checkout 出中间某次提交的源码。
-- **源码怎么到达用户**（**不要**把上游代码提交进本仓库）：公开仓库只放本面板。
+- **源码怎么到达用户**（**不要**把上游代码提交进本仓库，也不要另开公开镜像）：
   上游源码走 Release 包：
-  1. 维护者把源码放进归档目录（若收到更新的脚本，覆盖对应文件）；
+  1. 把最新的源码放进归档目录（覆盖对应文件；手上没有新源码就跳过这步）；
   2. `python dev/pack_upstream_src.py <源码目录> -o /tmp/upstream-pack --stamp "本次改了什么"`
      —— 打成 `workbuddy2api-src.tar.gz`（自动排除 `.git` 与 `config.json`/`auths`/`data`）；
   3. `gh release upload upstream-src /tmp/upstream-pack/workbuddy2api-src.tar.gz --clobber`
@@ -22,11 +23,11 @@
      否则它会成为 `releases/latest`，把面板的更新检查带偏）；
   4. 之后任何一次面板发版，CI 都会把它塞进发布包的 `upstream/`（取不到只告警、不
      阻断发布），用户装/更新时就用它。
-- **改动上游代码**：直接改本地那份源码（`/opt/workbuddy2api`），
+- **改动上游代码**：改本地那份源码（`/opt/workbuddy2api`），
   然后 `docker compose up -d --build`。改的是别人的 MIT 代码，需保留其
   `LICENSE` 与版权声明。
-- **还要不要写 `adapt(upstream)` 提交**：不必了。上游不再变，没有要跟的东西；
-  若将来把上游迁到自己的仓库并继续改，恢复这条流程即可。
+- **`adapt(upstream)` 提交**：有可访问的上游代码要跟时照旧写——把核对过的上游
+  提交号写进提交信息，供下次对照。
 
 ### 仍然要守的老规矩
 
