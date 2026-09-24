@@ -253,6 +253,70 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used_ip TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_prefix ON api_tokens(prefix);
+
+-- 红包：一次创建 N 个密钥，额度按拼手气或均分分配（见 server/redpacket.py）。
+--
+-- 为什么只记「这批是怎么来的」，不重复存密钥信息：密钥本体（配额、用量、
+-- 启停、过期）都在 api_keys 里，这里只用 key_id 指向它。同一件事存两份，
+-- 迟早会出现「红包说额度 100、密钥实际是 80」的不一致。
+CREATE TABLE IF NOT EXISTS red_packets (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  title         TEXT    NOT NULL DEFAULT '',
+  -- 额度类别：credit（限制真实扣费）/ token（限制 token 数）。两者口径不同，
+  -- 见 redpacket.py 模块头。
+  quota_kind    TEXT    NOT NULL,
+  total_amount  REAL    NOT NULL,
+  shares        INTEGER NOT NULL,
+  -- 分配方式：lucky（拼手气）/ even（均分）
+  mode          TEXT    NOT NULL,
+  -- 抽奖码（分享链接用）。高熵随机串，**没有它就拿不到红包里的密钥**，
+  -- 所以它本身就是凭据 —— 界面上只展示给管理员，不写进日志。
+  code          TEXT,
+  -- 这批密钥限定的模型（JSON 数组）。
+  --
+  -- **token 红包必须非空，积分红包必须为空**（见 redpacket.validate）：
+  -- 积分是「钱」（按真实扣费算，任何模型都能用），token 是「量」（与模型强
+  -- 相关——同一段上下文在不同模型下的 token 数、输出长度、上下文窗口都不同，
+  -- 不限定的话「10 万 token」这个说法就是浮动的）。记下来是为了在详情页
+  -- 能回答「这个红包当初限的是哪几个模型」——密钥本身也有这份白名单，
+  -- 但红包视角下看更直接。
+  models        TEXT    NOT NULL DEFAULT '[]',
+  created_by    TEXT    NOT NULL DEFAULT '',
+  created_at    INTEGER NOT NULL,
+  -- 这批密钥的失效时刻。默认 7 天（发出去的东西收不回，给个期限让它们自动清理）。
+  expires_at    INTEGER NOT NULL
+);
+
+-- 每一份红包 = 一个密钥。amount 是这一份分到的额度，各份之和
+-- **精确等于** red_packets.total_amount（浮点余数由 split_amount 兜底到最后一份）。
+--
+-- 为什么存明文 token（而 api_keys 里只存哈希）
+-- -------------------------------------------
+-- 密钥通常在创建时返回一次明文、之后只留哈希——但红包要**过一段时间**才由
+-- 领取者抽走，抽的那一刻必须把明文给他。两个选择：
+--   a) 抽奖时现场生成密钥（那就不能同时支持「管理员直接把 key 发出去」）；
+--   b) 创建时把明文存下来，抽奖时取出来。
+-- 这里选了 b，因为一个红包要能**同时**支持两种分发（管理员自己发 / 分享链接）。
+--
+-- 代价说清楚：库被读走 = 这批红包的密钥泄露。缓解措施是它们的**寿命短**
+-- （默认 7 天）且**额度有限**（红包的本质就是小额分发）；而库里本来就有
+-- 同等敏感的东西。真要更严，得引入加密依赖——但项目刻意保持窄依赖
+-- （只有 fastapi/uvicorn/httpx/pydantic），自己写加密比明文更危险
+-- （会让人以为它是安全的）。
+CREATE TABLE IF NOT EXISTS red_packet_shares (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  packet_id INTEGER NOT NULL,
+  key_id    INTEGER NOT NULL,
+  amount    REAL    NOT NULL,
+  -- 密钥明文。抽奖时原样返回给领取者；管理员自己发时也不用再查别处。
+  token     TEXT    NOT NULL DEFAULT '',
+  -- 领取者 IP 与时刻。NULL = 还没人抽到这一份。
+  -- **每 IP 对同一个红包只能抽一次**，由 redpacket.draw 在事务里保证
+  -- （不去建 UNIQUE 约束：SQLite 加约束要重建表，而这里靠事务已足够）。
+  claimed_by_ip TEXT,
+  claimed_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_packet_shares ON red_packet_shares(packet_id);
 """
 
 
@@ -413,6 +477,16 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # 缓存是否生效与「账号是否稳定」强相关，和上面那列一起看才有意义。
     # NULL = 上游未返回该字段（旧版上游/非对话类请求），与「命中 0」是两回事。
     ('request_logs', 'cache_hit_tokens', 'INTEGER'),
+    # 红包的抽奖支持：抽奖码 + 明文密钥 + 领取记录。
+    #
+    # 必须走迁移而不只是改建表语句：`CREATE TABLE IF NOT EXISTS` 对**已存在**
+    # 的表什么都不做（红包那两张表在本功能的前半部分就建好了），不补列的话
+    # 升级上来的部署一抽奖就报「no such column」。新装不受影响，两条路径
+    # 都要能走通，所以建表语句与迁移两处都得有。
+    ('red_packets', 'code', 'TEXT'),
+    ('red_packet_shares', 'token', "TEXT NOT NULL DEFAULT ''"),
+    ('red_packet_shares', 'claimed_by_ip', 'TEXT'),
+    ('red_packet_shares', 'claimed_at', 'INTEGER'),
 )
 
 

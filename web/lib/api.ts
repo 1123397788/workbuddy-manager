@@ -9,6 +9,13 @@ import type {
   CreditsMeta,
   AccountsResponse,
   ApiKey,
+  ClaimInfo,
+  CreatedRedPacket,
+  DrawResult,
+  RedPacket,
+  RedPacketDetail,
+  RedPacketKind,
+  RedPacketMode,
   ApiToken,
   CreatedApiToken,
   IpAccessLog,
@@ -247,6 +254,35 @@ export const keyApi = {
   checkModels: (models: string[], realm: string) =>
     post<{checked: boolean; unknown: string[]; reason?: string}>(
       '/api/keys/check-models', {models, realm}),
+};
+
+/* ── 红包：批量发放带额度的密钥（见 server/redpacket.py）────
+ * create 返回**明文 key**，且仅此一次（库里只存哈希）。 */
+export const redPacketApi = {
+  list: () => get<RedPacket[]>('/api/red-packets'),
+  detail: (id: number) => get<RedPacketDetail>(`/api/red-packets/${id}`),
+  create: (body: {
+    title: string;
+    quota_kind: RedPacketKind;
+    total_amount: number;
+    shares: number;
+    mode: RedPacketMode;
+    /** 有效期（天）。null = 用后端默认值（7 天） */
+    ttl_days: number | null;
+    /** 模型白名单：**token 红包必填、积分红包必须为空**（见 server/redpacket.py） */
+    models: string[];
+  }) => post<CreatedRedPacket>('/api/red-packets', body),
+  /** 收回整批（停用这批密钥，可逆）。返回停用的数量。 */
+  revoke: (id: number) => post<{revoked: number}>(`/api/red-packets/${id}/revoke`),
+};
+
+/* ── 抽奖（**公开**，不需要登录）─────────────────────────
+ * 收到链接的是同事朋友，不该要求他们注册账号。防滥用靠「每 IP 一次」
+ * + 128 位抽奖码 + 有效期。 */
+export const claimApi = {
+  info: (code: string) => get<ClaimInfo>(`/api/claim/${encodeURIComponent(code)}`),
+  /** 抽一份。同一 IP 第二次会 409（提示「你已经抽过了」）。 */
+  draw: (code: string) => post<DrawResult>(`/api/claim/${encodeURIComponent(code)}`, {}),
 };
 
 /* ── 访问令牌（管理面作用域化 API Token）──────────────────

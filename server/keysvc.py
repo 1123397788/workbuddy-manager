@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import sqlite3
 import time
 
 from . import db
@@ -178,26 +179,42 @@ def create_key(
     quota: int = 0,
     realm: str = '',
     quota_credit: float = 0,
+    *,
+    _conn: sqlite3.Connection | None = None,
 ) -> dict:
+    """创建一个密钥。返回含**明文 token** 的字典（库里只存哈希）。
+
+    `_conn`：传入一个**已开启事务**的连接时，本函数在它上面执行且**不自行提交**，
+    由调用方负责 commit/rollback。红包（`redpacket.create_packet`）用它来保证
+    「N 个密钥 + 红包记录」整批原子——中途失败必须整体回滚，否则会留下几个
+    没人知道出处的密钥。默认 None 时行为与从前完全一致（自己提交）。
+
+    之所以做成参数而不是让红包自己写一份 INSERT：SQL 抄第二遍就是第二份事实，
+    改一处漏一处——本项目在 count_tokens 的鉴权上正是这么漂移出真漏洞的。
+    """
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
-    key_id = db.execute(
-        'INSERT INTO api_keys(name, key_hash, prefix, enabled, expires_at, max_ips, ip_allowlist, models, realm, quota, used_tokens, quota_credit, used_credit, created_at) '
-        'VALUES(?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)',
-        (
-            name,
-            _hash(token),
-            token[:12],
-            expires_at,
-            max_ips,
-            json.dumps(_norm_cidrs(ip_allowlist)),
-            json.dumps(models or []),
-            _norm_realm(realm),
-            quota,
-            _norm_credit_quota(quota_credit),
-            int(time.time()),
-        ),
+    sql = ('INSERT INTO api_keys(name, key_hash, prefix, enabled, expires_at, max_ips, '
+           'ip_allowlist, models, realm, quota, used_tokens, quota_credit, used_credit, '
+           'created_at) VALUES(?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)')
+    args = (
+        name,
+        _hash(token),
+        token[:12],
+        expires_at,
+        max_ips,
+        json.dumps(_norm_cidrs(ip_allowlist)),
+        json.dumps(models or []),
+        _norm_realm(realm),
+        quota,
+        _norm_credit_quota(quota_credit),
+        int(time.time()),
     )
-    row = db.query_one('SELECT * FROM api_keys WHERE id = ?', (key_id,))
+    if _conn is not None:
+        key_id = int(_conn.execute(sql, args).lastrowid or 0)
+        row = _conn.execute('SELECT * FROM api_keys WHERE id = ?', (key_id,)).fetchone()
+    else:
+        key_id = db.execute(sql, args)
+        row = db.query_one('SELECT * FROM api_keys WHERE id = ?', (key_id,))
     out = _parse(row)
     out['key'] = token  # 仅此一次返回明文
     return out
