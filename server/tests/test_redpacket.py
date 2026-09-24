@@ -298,6 +298,37 @@ class CreatePacketTest(unittest.TestCase):
             self.assertNotIn('key', it)
             self.assertTrue(it['prefix'].startswith('wbk_'), '前缀要能对上密钥列表')
 
+    def test_revoke_blanks_plaintext_of_unclaimed_shares(self) -> None:
+        """收回时未领份额的明文 key 要从库里抹掉（评审补）。
+
+        这些份额已被作废（claimed_by_ip 置空 → 抽奖只认 NULL，再也抽不走），
+        明文留着就只是「库被读走时多泄露一份」的纯风险。金额保留，详情页照旧
+        能回答「原本几份、还剩几份」。
+        """
+        from server import db, redpacket
+        out = self._create(shares=3)
+        before = db.query('SELECT token FROM red_packet_shares WHERE packet_id = ?',
+                          (out['id'],))
+        self.assertTrue(all(r['token'] for r in before), '创建时每份都存了明文')
+        redpacket.revoke_packet(out['id'])
+        after = db.query('SELECT token, amount FROM red_packet_shares '
+                         'WHERE packet_id = ?', (out['id'],))
+        self.assertTrue(all(not r['token'] for r in after), '未领份额的明文应被抹掉')
+        self.assertTrue(all(r['amount'] > 0 for r in after), '金额要保留（详情页还要用）')
+        self.assertEqual(len(after), 3, '行不能删：要能看出原本几份')
+
+    def test_revoke_keeps_plaintext_of_claimed_share(self) -> None:
+        """已被人领走的那份**不抹**：领取者手里本来就有，库里留着便于管理员对照。"""
+        from server import db, redpacket
+        out = self._create(shares=3)
+        row = db.query_one('SELECT id FROM red_packet_shares WHERE packet_id = ? '
+                           'ORDER BY id LIMIT 1', (out['id'],))
+        db.execute("UPDATE red_packet_shares SET claimed_by_ip = '203.0.113.9', "
+                   'claimed_at = 1 WHERE id = ?', (row['id'],))
+        redpacket.revoke_packet(out['id'])
+        kept = db.query_one('SELECT token FROM red_packet_shares WHERE id = ?', (row['id'],))
+        self.assertTrue(kept['token'], '已领取份额的明文不该被抹掉')
+
     def test_list_marks_revoked(self) -> None:
         from server import redpacket
         out = self._create(shares=2)
