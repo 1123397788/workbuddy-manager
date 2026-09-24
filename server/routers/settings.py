@@ -70,8 +70,13 @@ async def test_upstash(body: UpstashTestIn, user: dict = Depends(security.requir
 
 
 @router.post('/settings/upstash/reload')
-async def reload_upstream(user: dict = Depends(security.require_admin)) -> dict:
-    """立即重启上游容器（等待结果）。一般无需手动调用——保存配置会自动重载。"""
+async def reload_upstream(user: dict = Depends(security.require_session_admin)) -> dict:
+    """立即重启上游容器（等待结果）。一般无需手动调用——保存配置会自动重载。
+
+    与会话绑定：它和 `/api/restart` 是**同一个动作**（都走 `reload.restart_now()`），
+    后者在引入 API Token 时被划为「仅会话」。同一个动作不能因为走的是哪个路由就
+    权限不同——否则 token 泄露者能从这里把上游重启掉，那条边界就形同虚设。
+    """
     ok, message = await reload.restart_now()
     return {'ok': ok, 'message': message}
 

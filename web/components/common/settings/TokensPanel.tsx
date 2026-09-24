@@ -3,6 +3,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {KeyRound, Plus, Trash2} from 'lucide-react';
 import {errText, tokenApi} from '@/lib/api';
+import {useAuth} from '@/lib/auth-context';
 import {useI18n} from '@/lib/i18n/provider';
 import {notify} from '@/lib/toast';
 import type {ApiToken, CreatedApiToken} from '@/lib/types';
@@ -40,6 +41,7 @@ import {
  */
 export function TokensPanel() {
   const {t} = useI18n();
+  const {isAdmin} = useAuth();
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
@@ -58,8 +60,22 @@ export function TokensPanel() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    // 非管理员不拉列表：这几个接口都是 require_session_admin，拉了只会吃 403，
+    // 弹出的报错对用户没有任何可行动信息（与「设置」页其它面板的处置一致：
+    // 只读账号看到的是「为什么看不到」而不是一次失败请求）。
+    if (isAdmin) void load();
+  }, [load, isAdmin]);
+
+  if (!isAdmin) {
+    return (
+      <div className="rounded-[20px] bg-muted p-8 text-center text-sm">
+        <div className="font-medium">{t('settings.tokensAdminRequired')}</div>
+        <div className="mx-auto mt-2 max-w-[38rem] text-xs text-muted-foreground">
+          {t('settings.tokensAdminRequiredDesc')}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

@@ -1039,6 +1039,8 @@
     "expiryDailyLabel": "Group expiring credits by day",
     "expiryDailyDesc": "When on, the dashboard groups them by **calendar day**: credits expiring on the same day are summed instead of showing only the nearest one. Hovering still lists the amount and date of every entry.",
     "tabTokens": "Access tokens",
+    "tokensAdminRequired": "Administrator required",
+    "tokensAdminRequiredDesc": "Access tokens can call the admin API without signing in (including minting gateway keys and changing the account pool), so they are limited to administrators. Ask an admin to set your role to admin under Settings → Users.",
     "tokensNew": "New access token",
     "tokensNewDesc": "A long-lived credential for scripts / CI. It only authorises the admin API, not model calls. The plaintext is shown once, on creation.",
     "tokensName": "Name",

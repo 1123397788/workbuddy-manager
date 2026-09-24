@@ -1015,6 +1015,8 @@
     "expiryDailyLabel": "到期积分按天模糊统计",
     "expiryDailyDesc": "开启后，仪表盘的到期积分按**天**归并：同一天到期的多笔合并显示总和，而不是只显示最近那一笔。悬停仍能看到每一笔的金额与日期。",
     "tabTokens": "访问令牌",
+    "tokensAdminRequired": "需要管理员权限",
+    "tokensAdminRequiredDesc": "访问令牌能免登录调用管理接口（含创建网关密钥、改账号池），因此只对管理员开放。请让管理员在「设置 → 管理用户」把你的角色调整为 admin。",
     "tokensNew": "新建访问令牌",
     "tokensNewDesc": "给脚本 / CI 用的长期凭据。只授权管理接口，不能调用模型；明文仅在创建时显示一次。",
     "tokensName": "名称",

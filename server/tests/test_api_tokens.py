@@ -197,6 +197,9 @@ class ApiTokenTest(unittest.TestCase):
             ('post', '/api/system/upstream-ref', {'ref': ''}),
             ('post', '/api/security/logs/clear', None),
             ('post', '/api/users', {'username': 'x', 'password': '12345678', 'role': 'viewer'}),
+            # 评审补：这条同样是「重启上游容器」，与 /api/restart 同一个动作 ——
+            # 不能因为走的是设置页那个路由就放宽给令牌（矩阵守卫也钉着它）。
+            ('post', '/api/settings/upstash/reload', None),
         ]
         for method, path, body in cases:
             r = getattr(self.c, method)(path, headers=h, **({'json': body} if body else {}))
@@ -242,6 +245,127 @@ class ApiTokenTest(unittest.TestCase):
             cfg['users'] = [{'username': 'admin', 'role': 'admin',
                              'pwd_hash': security.make_hash('admin-pw')}]
             security.save_users(cfg)
+
+
+class WriteEndpointScopeMatrixTest(unittest.TestCase):
+    """把「哪些写接口拿什么凭据」钉成清单——权限变更必须显式改这里。
+
+    为什么要有：作用域是靠**每个接口的依赖**表达的（`require_session_admin` /
+    `require_admin` / `current_user`），散在十几个文件里。评审时我逐个枚举过一遍，
+    抓到一处不一致：`/api/settings/upstash/reload` 与 `/api/restart` 是**同一个动作**
+    （都走 `reload.restart_now()`，重启上游容器），前者却只要求 `require_admin`，
+    于是管理令牌能把上游重启掉——那条「服务级动作只对真人开放」的边界就穿了。
+
+    这类漏洞靠人读 diff 很容易漏（分散、且每个接口单看都合理），所以：
+
+      · `SESSION_ONLY` 里的接口一旦放宽，这里立刻红；
+      · `ANY_LOGGED_IN`（**只读令牌也能调的写接口**）最危险，单独钉住——
+        加进去就必须先回答「只读为什么可以写」；
+      · 只断言类别归属，不锁与权限无关的新增接口（新增写接口若落在
+        `require_admin` 里不会红，那是允许的；落到另外两类才需要人来确认）。
+    """
+
+    # 服务级 / 不可逆 / 能提权或抹痕迹的动作，只对**会话**开放。
+    SESSION_ONLY = {
+        'DELETE /api/accounts/{filename}',
+        'DELETE /api/security/rules/{rule_id}',
+        'DELETE /api/tokens/{token_id}',
+        'DELETE /api/users/{username}',
+        'PATCH /api/tokens/{token_id}',
+        'PATCH /api/users/{username}',
+        'POST /api/checkin-logs/clear',
+        'POST /api/logs/clear',
+        'POST /api/restart',
+        'POST /api/security/config',
+        'POST /api/security/logs/clear',
+        'POST /api/security/rules',
+        'POST /api/sessions/revoke',
+        'POST /api/settings/upstream',
+        'POST /api/settings/upstash/reload',   # 评审补：与 /api/restart 同动作
+        'POST /api/system/update',
+        'POST /api/system/upstream-ref',
+        'POST /api/task-logs/clear',
+        'POST /api/tokens',
+        'POST /api/users',
+    }
+    # 写方法但只要求「已登录」——只读令牌也能调。必须逐个有理由。
+    ANY_LOGGED_IN = {
+        'POST /api/accounts/refresh-credits',   # 刷新积分快照；force=true 内部再查 admin
+        'POST /api/keys/check-models',          # 只比对已缓存模型清单，不发网络
+    }
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        from fastapi.routing import APIRoute
+        from server.main import app
+
+        cls.rows: list[tuple[str, list[str]]] = []
+        routes: list[APIRoute] = []
+        for r in app.routes:
+            inner = getattr(r, 'original_router', None)
+            if inner is not None:
+                routes.extend(x for x in inner.routes if isinstance(x, APIRoute))
+            elif isinstance(r, APIRoute):
+                routes.append(r)
+
+        for r in routes:
+            if not r.path.startswith('/api'):
+                continue
+            methods = {m for m in (r.methods or set())
+                       if m in {'POST', 'PUT', 'PATCH', 'DELETE'}}
+            if not methods:
+                continue
+            names: list[str] = []
+
+            def walk(dep) -> None:
+                if dep is None:
+                    return
+                call = getattr(dep, 'call', None)
+                if call is not None:
+                    names.append(getattr(call, '__name__', str(call)))
+                for sub in getattr(dep, 'dependencies', []) or []:
+                    walk(sub)
+
+            walk(getattr(r, 'dependant', None))
+            cls.rows.append((f"{','.join(sorted(methods))} {r.path}", names))
+
+    def test_scan_is_not_vacuous(self) -> None:
+        """先确认真的扫到了接口——否则下面两条会在空集合上「通过」。"""
+        self.assertGreater(len(self.rows), 30,
+                           '没扫到写接口，扫描逻辑可能失配（_IncludedRouter 没摊平？）')
+
+    def _bucket(self, kind: str) -> set[str]:
+        """按**最外层**的鉴权依赖归类。
+
+        注意 `require_admin` 与 `require_session_admin` 内部都依赖 `current_user`，
+        所以不能简单看「依赖树里有没有 current_user」——那会把全部写接口都算进来
+        （第一版就是，报出一长串「新增」）。这里按依赖名出现的组合判断。
+        """
+        out = set()
+        for key, names in self.rows:
+            if kind == 'session_only':
+                if 'require_session_admin' in names:
+                    out.add(key)
+            elif kind == 'any_logged_in':
+                if ('current_user' in names and 'require_admin' not in names
+                        and 'require_session_admin' not in names):
+                    out.add(key)
+        return out
+
+    def test_session_only_set_is_exactly_as_documented(self) -> None:
+        got = self._bucket('session_only')
+        self.assertEqual(got, self.SESSION_ONLY,
+                         '仅会话接口的集合变了。放宽一个接口前请先想清楚：'
+                         '它是否能让 token 泄露者扩大权限 / 抹掉痕迹 / 影响服务可用性？'
+                         f'\n新增了：{sorted(got - self.SESSION_ONLY)}'
+                         f'\n消失了：{sorted(self.SESSION_ONLY - got)}')
+
+    def test_write_endpoints_open_to_any_logged_in_are_declared(self) -> None:
+        got = self._bucket('any_logged_in')
+        self.assertEqual(got, self.ANY_LOGGED_IN,
+                         '有写接口只要求「已登录」——只读令牌也能调它。'
+                         f'\n新增了：{sorted(got - self.ANY_LOGGED_IN)}'
+                         f'\n消失了：{sorted(self.ANY_LOGGED_IN - got)}')
 
 
 if __name__ == '__main__':
