@@ -226,6 +226,33 @@ CREATE TABLE IF NOT EXISTS task_logs (
   dedup_key TEXT NOT NULL UNIQUE
 );
 CREATE INDEX IF NOT EXISTS idx_task_logs_ts ON task_logs(ts);
+
+-- 管理面**作用域化 API Token**（见 docs/api-tokens.md）。
+--
+-- 与 api_keys（数据面网关密钥）是**两套东西**：api_keys 只授权模型调用，
+-- 与后台权限无关；本表授权的是管理面 /api/*，所以要求更严：
+--   · 明文形如 wbt_<base64url>，**库中只存 SHA-256 哈希**，明文仅在创建时返回一次；
+--   · prefix 用于定位（先按前缀取候选行，再常量时间比哈希），避免全表扫描；
+--   · scope 决定角色（readonly → viewer，admin → admin）；
+--   · 可吊销（enabled）与可过期（expires_at），鉴权时逐次校验、即时生效。
+--
+-- 历史教训：2026-09-14 的事故源于 users.json 里一个直接授予 admin 的
+-- X-API-Key 数组。本表的形态与它**刻意不同**：在数据库而非配置文件、
+-- 只存哈希、有 scope、可吊销、全程审计。
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT    NOT NULL,
+  token_hash   TEXT    NOT NULL,
+  prefix       TEXT    NOT NULL,
+  scope        TEXT    NOT NULL,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  expires_at   INTEGER,
+  created_at   INTEGER NOT NULL,
+  created_by   TEXT    NOT NULL DEFAULT '',
+  last_used_at INTEGER,
+  last_used_ip TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tokens_prefix ON api_tokens(prefix);
 """
 
 

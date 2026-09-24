@@ -794,7 +794,8 @@ Check Settings → Available models for the live list. Commonly (all with a 1310
 | `POST` | `/api/auth/start` `/api/auth/poll` | admin | QR authorisation flow |
 | `POST` | `/api/accounts/{file}/checkin` `/test` `/refresh` | admin | Check-in / probe / refresh |
 | `DELETE` | `/api/accounts/{file}` | admin | Delete an account |
-| `GET/POST/PATCH/DELETE` | `/api/keys[/{id}]` | session / admin | Key management |
+| `GET/POST/PATCH/DELETE` | `/api/keys[/{id}]` | session / admin | Key management (handed to downstream callers) |
+| `GET/POST/PATCH/DELETE` | `/api/tokens[/{id}]` | session (admin) | Admin API tokens (for scripts / CI, see [docs/api-tokens.md](docs/api-tokens.md)) |
 | `GET` | `/api/logs` `/api/stats/*` | session | Logs and usage |
 | `GET/POST/DELETE` | `/api/security/*` | session / admin | IP rules and audit |
 | `GET/POST` | `/api/settings/*` | session / admin | Upstream config, model mapping |
@@ -843,6 +844,11 @@ workbuddy-manager/
   and login lockout cannot be spoofed
 - Failed logins are locked **per IP and per username**, blocking both single-host and
   distributed brute force
+- The admin API supports **scoped API tokens** (read-only / admin, revocable, expiring;
+  only a hash is stored and every use is auditable) so scripts / CI can call it without
+  logging in. **High-risk endpoints and token management itself accept sessions only**,
+  so a leaked token cannot escalate privileges or persist itself
+  (see [docs/api-tokens.md](docs/api-tokens.md))
 - `/docs` and `/openapi.json` are disabled in production (`WB_ENABLE_DOCS=1` to enable)
 - The gateway limits request body size (8 MiB) and per-key request rate (120/min by default)
 - Security headers (CSP, `X-Frame-Options`, `X-Content-Type-Options`, …) are set

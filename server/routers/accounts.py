@@ -661,7 +661,7 @@ def checkin_logs(
 
 
 @router.post('/checkin-logs/clear')
-def clear_checkin_logs(user: dict = Depends(security.require_admin)) -> dict:
+def clear_checkin_logs(user: dict = Depends(security.require_session_admin)) -> dict:
     db.clear_checkin_logs()
     return {'ok': True}
 
@@ -834,7 +834,7 @@ async def collect_task_logs(user: dict = Depends(security.require_admin)) -> dic
 
 
 @router.post('/task-logs/clear')
-def clear_task_logs(user: dict = Depends(security.require_admin)) -> dict:
+def clear_task_logs(user: dict = Depends(security.require_session_admin)) -> dict:
     db.clear_task_logs()
     return {'ok': True}
 
@@ -1070,7 +1070,7 @@ async def account_set_note(
 
 
 @router.delete('/accounts/{filename}')
-async def account_delete(filename: str, user: dict = Depends(security.require_admin)) -> dict:
+async def account_delete(filename: str, user: dict = Depends(security.require_session_admin)) -> dict:
     try:
         removed = wb2api.delete_auth_account(filename)
     except ValueError as exc:
@@ -1082,7 +1082,7 @@ async def account_delete(filename: str, user: dict = Depends(security.require_ad
 
 
 @router.post('/restart')
-async def restart(user: dict = Depends(security.require_admin)) -> dict:
+async def restart(user: dict = Depends(security.require_session_admin)) -> dict:
     ok, message = await reload.restart_now()
     return {'ok': ok, 'message': message}
 
