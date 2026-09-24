@@ -430,7 +430,9 @@
     "quotaCredit": "크레딧 한도",
     "quotaCreditHint": "업스트림이 반환한 실제 과금으로 누적됩니다(token 추정이 아님). 위의 token 한도와 별개이며, 둘 중 하나를 초과하면 호출이 거부됩니다. 0이면 무제한",
     "creditUsed": "크레딧 {used} / {quota}",
-    "modelsUnknown": "다음 이름에 해당하는 모델을 찾을 수 없습니다(오타 가능): {names}. 목록에 표시되지 않으며 호출도 거부됩니다."
+    "modelsUnknown": "다음 이름에 해당하는 모델을 찾을 수 없습니다(오타 가능): {names}. 목록에 표시되지 않으며 호출도 거부됩니다.",
+    "tabNormal": "일반 키",
+    "tabPacket": "봉투 키"
   },
   "logs": {
     "cacheShort": "캐시 {pct}%",
@@ -1340,6 +1342,7 @@
     "autoCopied": "키를 자동으로 복사했습니다",
     "autoCopiedDetail": "바로 붙여넣어 사용할 수 있습니다",
     "autoCopyFailed": "자동 복사 실패",
-    "autoCopyFailedDetail": "이전 화면으로 돌아가 직접 복사해 주세요 — 평문은 한 번만 표시됩니다"
+    "autoCopyFailedDetail": "이전 화면으로 돌아가 직접 복사해 주세요 — 평문은 한 번만 표시됩니다",
+    "alreadyWithKey": "이미 받았습니다 — 이것이 내 몫입니다"
   }
 }

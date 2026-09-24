@@ -430,7 +430,9 @@
     "quotaCredit": "積分額度",
     "quotaCreditHint": "按上游回傳的真實扣費累計（不是按 token 估算）。與上面的 token 額度互不影響，任一超限即拒絕呼叫；留 0 = 不限",
     "creditUsed": "積分 {used} / {quota}",
-    "modelsUnknown": "這些名字找不到對應模型（可能拼錯了）：{names}。它們不會被列出，呼叫時也會被拒。"
+    "modelsUnknown": "這些名字找不到對應模型（可能拼錯了）：{names}。它們不會被列出，呼叫時也會被拒。",
+    "tabNormal": "一般金鑰",
+    "tabPacket": "紅包金鑰"
   },
   "logs": {
     "cacheShort": "快取 {pct}%",
@@ -1340,6 +1342,7 @@
     "autoCopied": "已自動複製金鑰",
     "autoCopiedDetail": "直接貼上即可使用",
     "autoCopyFailed": "自動複製失敗",
-    "autoCopyFailedDetail": "請回到上一步手動複製 —— 明文只顯示這一次"
+    "autoCopyFailedDetail": "請回到上一步手動複製 —— 明文只顯示這一次",
+    "alreadyWithKey": "你已經領過了，這是你的那份"
   }
 }

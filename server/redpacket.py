@@ -364,7 +364,16 @@ class ClaimError(ValueError):
 
 
 def claim_info(code: str, ip: str) -> dict:
-    """抽奖页要显示的信息。**不含密钥** —— 没点「开启」之前不该能拿到。"""
+    """抽奖页要显示的信息。
+
+    **已经领过的 IP 会连带把那一份的密钥一起返回**：用户关掉弹窗之后往往
+    才想起来没存，而明文只显示那一次；让他刷新一下就能找回来，比「请联系
+    发红包的人」有用得多。没领过的 IP 拿不到任何密钥（`my_key` 为 None）。
+
+    代价说清楚：同一个 NAT 出口下的人（同一间办公室、同一个手机热点）
+    能看到彼此领到的那份。这是刻意的取舍 —— 红包的场景本来就是熟人，
+    而「领完就再也找不回来」是更常发生、更让人恼火的问题。
+    """
     p = db.query_one('SELECT * FROM red_packets WHERE code = ?', (code,))
     if not p:
         raise ClaimError('红包不存在或链接已失效')
@@ -372,7 +381,7 @@ def claim_info(code: str, ip: str) -> dict:
         'SELECT COUNT(*) AS n FROM red_packet_shares '
         'WHERE packet_id = ? AND claimed_by_ip IS NULL', (p['id'],))['n']
     mine = db.query_one(
-        'SELECT id FROM red_packet_shares '
+        'SELECT amount, token FROM red_packet_shares '
         'WHERE packet_id = ? AND claimed_by_ip = ?', (p['id'], ip))
     return {
         'title': p['title'],
@@ -383,6 +392,9 @@ def claim_info(code: str, ip: str) -> dict:
         'expires_at': int(p['expires_at']),
         'expired': int(p['expires_at']) < time.time(),
         'claimed': mine is not None,
+        # 只有「这个 IP 自己领过」的那一份才会出现在这里，不是别人的。
+        'my_amount': float(mine['amount']) if mine else None,
+        'my_key': str(mine['token']) if mine else None,
     }
 
 
@@ -408,26 +420,31 @@ def draw(code: str, ip: str) -> dict:
                             (p['id'], ip)).fetchone():
                 raise ClaimError('这个网络已经领过了', already=True)
             row = conn.execute(
-                'SELECT id FROM red_packet_shares '
+                'SELECT id, amount, token FROM red_packet_shares '
                 'WHERE packet_id = ? AND claimed_by_ip IS NULL '
                 'ORDER BY RANDOM() LIMIT 1', (p['id'],)).fetchone()
             if not row:
                 raise ClaimError('红包已被领完')
+            # 明文为空 = 这个红包是在「存明文」这一列上线之前建的（它的密钥
+            # 当时只存了哈希）。**必须在标记领取之前拦下**：放过去的话份额被
+            # 消耗掉，而抽到的人拿到的是一把看不见的密钥 —— 两头都亏。
+            #
+            # 这类红包可以用 scripts 里的补救脚本修（重新签一把密钥并回填），
+            # 所以提示里直接告诉他找发红包的人，而不是让人以为链接坏了。
+            if not str(row['token'] or '').strip():
+                raise ClaimError('这个红包创建于旧版本，不支持抽奖；请联系发红包的人重新生成')
             conn.execute(
                 'UPDATE red_packet_shares SET claimed_by_ip = ?, claimed_at = ? '
                 'WHERE id = ?', (ip, int(time.time()), row['id']))
-            got = conn.execute(
-                'SELECT amount, token FROM red_packet_shares WHERE id = ?',
-                (row['id'],)).fetchone()
             conn.commit()
         except Exception:
             conn.rollback()
             raise
 
     return {
-        'amount': float(got['amount']),
+        'amount': float(row['amount']),
         'quota_kind': p['quota_kind'],
         'models': _models_of(p['models']),
-        'key': got['token'],          # 明文；库里那份只给这一次
+        'key': str(row['token']),     # 明文；库里那份只给这一次
         'expires_at': int(p['expires_at']),
     }

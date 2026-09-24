@@ -430,7 +430,9 @@
     "quotaCredit": "积分额度",
     "quotaCreditHint": "按上游返回的真实扣费累计（不是按 token 估算）。与上面的 token 额度互不影响，任一超限即拒绝调用；留 0 = 不限",
     "creditUsed": "积分 {used} / {quota}",
-    "modelsUnknown": "这些名字找不到对应模型（可能拼错了）：{names}。它们不会被列出，调用时也会被拒。"
+    "modelsUnknown": "这些名字找不到对应模型（可能拼错了）：{names}。它们不会被列出，调用时也会被拒。",
+    "tabNormal": "普通密钥",
+    "tabPacket": "红包密钥"
   },
   "logs": {
     "cacheShort": "缓存 {pct}%",
@@ -1135,6 +1137,7 @@
     "autoCopied": "已自动复制密钥",
     "autoCopiedDetail": "直接粘贴即可使用",
     "autoCopyFailed": "自动复制失败",
-    "autoCopyFailedDetail": "请回到上一步手动复制 —— 明文只显示这一次"
+    "autoCopyFailedDetail": "请回到上一步手动复制 —— 明文只显示这一次",
+    "alreadyWithKey": "你已经领过了，这是你的那份"
   }
 }

@@ -454,7 +454,9 @@
     "quotaCredit": "Credit quota",
     "quotaCreditHint": "Accumulated from the real charge reported by the upstream (not estimated from tokens). Independent of the token quota above — exceeding either one blocks calls. Leave 0 for unlimited",
     "creditUsed": "{used} / {quota} credits",
-    "modelsUnknown": "No model matches these names (possible typo): {names}. They will not be listed and calls using them are rejected."
+    "modelsUnknown": "No model matches these names (possible typo): {names}. They will not be listed and calls using them are rejected.",
+    "tabNormal": "Regular keys",
+    "tabPacket": "From red packets"
   },
   "logs": {
     "cacheShort": "cache {pct}%",
@@ -1364,6 +1366,7 @@
     "autoCopied": "Key copied automatically",
     "autoCopiedDetail": "Just paste it where you need it",
     "autoCopyFailed": "Auto-copy failed",
-    "autoCopyFailedDetail": "Go back and copy it manually — the key is shown only once"
+    "autoCopyFailedDetail": "Go back and copy it manually — the key is shown only once",
+    "alreadyWithKey": "You've already claimed — here's yours"
   }
 }

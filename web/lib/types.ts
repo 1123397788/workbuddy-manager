@@ -286,6 +286,13 @@ export interface ApiKey {
    */
   quota_credit: number;
   used_credit: number;
+  /**
+   * 来源红包的 id；null = 手工建的。
+   *
+   * 密钥列表按它分成两个 tab：红包一次生成一批、额度零碎，与手工建的混在
+   * 一起很难看（也从没人会去逐把编辑红包发出去的密钥）。
+   */
+  packet_id: number | null;
   created_at: number;
   last_used_at: number | null;
   /** 仅在创建时返回一次 */
@@ -914,6 +921,15 @@ export interface ClaimInfo {
   expired: boolean;
   /** 本机（IP）是不是已经抽过了 */
   claimed: boolean;
+  /**
+   * 本机领到的那一份（没领过时为 null）。
+   *
+   * 第二次打开时会**直接展示**：关掉弹窗才想起没存密钥是很常见的，而明文
+   * 只显示那一次 —— 刷新就能找回来，比「请联系发红包的人」有用。
+   * 代价是同一 NAT 出口下的人能看到彼此的那份（红包的熟人场景下可接受）。
+   */
+  my_amount: number | null;
+  my_key: string | null;
 }
 
 /** 抽到的那一份。`key` 是**明文**，只在抽的这一刻返回。 */
