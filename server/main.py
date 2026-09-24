@@ -15,7 +15,8 @@ from . import config, db, security
 from .iputil import client_ip
 from .routers import (
     accounts, anthropic, auth, gateway, keys, logs, models, playground,
-    responses, security as security_router, settings, stats, system, tokens,
+    redpackets, responses, security as security_router, settings, stats,
+    system, tokens,
 )
 from .services import accountlog, renew, tasklog, taskrun
 
@@ -129,6 +130,8 @@ async def limit_api_body(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(accounts.router)
 app.include_router(keys.router)
+# 红包：批量发放带额度的密钥（与密钥同属「分发」这件事，所以挨着放）
+app.include_router(redpackets.router)
 app.include_router(logs.router)
 app.include_router(stats.router)
 app.include_router(security_router.router)

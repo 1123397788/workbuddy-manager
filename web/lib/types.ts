@@ -842,3 +842,69 @@ export interface UpstreamStats {
   total?: UpstreamStatRow;
   models?: UpstreamStatRow[];
 }
+
+/* ── 红包：一次建一批带额度的密钥，管理员自己分发 ──────────
+ * 见 server/redpacket.py 的模块说明（为什么不做领取页/分享码）。 */
+
+/**
+ * 额度类别。两者**限制的对象不同**，不只是单位不同：
+ * credit 限制上游返回的真实扣费（口径准）；token 限制 token 总数（直观）。
+ */
+export type RedPacketKind = 'credit' | 'token';
+
+/** 分配方式：lucky = 拼手气（有人多有人少），even = 均分 */
+export type RedPacketMode = 'lucky' | 'even';
+
+export interface RedPacket {
+  id: number;
+  title: string;
+  quota_kind: RedPacketKind;
+  total_amount: number;
+  shares: number;
+  mode: RedPacketMode;
+  /**
+   * 限定的模型范围。**token 红包非空、积分红包恒为空**（两类规则相反，见
+   * server/redpacket.py 的 validate）：token 是「量」与模型强相关，
+   * 积分是「钱」任何模型都能用。
+   */
+  models: string[];
+  created_by: string;
+  created_at: number;
+  expires_at: number;
+  /** 整批都已停用 = 已收回（部分停用不算，那种情况去密钥页看单把） */
+  revoked: boolean;
+}
+
+/** 红包里的一份（= 一个密钥）。**不含明文** —— 库里只有哈希。 */
+export interface RedPacketItem {
+  key_id: number;
+  prefix: string;
+  amount: number;
+  enabled: boolean;
+  used_tokens: number;
+  used_credit: number;
+}
+
+export interface RedPacketDetail extends RedPacket {
+  items: RedPacketItem[];
+}
+
+/**
+ * 创建红包的结果：含**明文 key**，且**仅此一次**（与 keyApi.create 同理）。
+ *
+ * 界面上必须提示「离开后无法再看到」并提供复制/导出 —— 这是「直接发 key」
+ * 方案的固有代价，不是缺陷。
+ */
+export interface CreatedRedPacket {
+  id: number;
+  title: string;
+  quota_kind: RedPacketKind;
+  total_amount: number;
+  shares: number;
+  mode: RedPacketMode;
+  /** 同上：token 红包非空、积分红包恒为空 */
+  models: string[];
+  created_at: number;
+  expires_at: number;
+  keys: ApiKey[];
+}
