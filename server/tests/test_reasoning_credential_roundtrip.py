@@ -272,11 +272,24 @@ class AnthropicRoundTripTest(unittest.TestCase):
 
 
 class ThinkingEnabledDetectionTest(unittest.TestCase):
-    """`thinking.type == 'enabled'` 的判定（含畸形值）。"""
+    """`thinking.type` 是否算「启用思考」的判定（含畸形值）。"""
 
     def test_enabled(self) -> None:
         self.assertTrue(A._thinking_enabled({'thinking': {'type': 'enabled'}}))
         self.assertTrue(A._thinking_enabled({'thinking': {'type': 'ENABLED'}}))
+
+    def test_adaptive_counts_as_enabled(self) -> None:
+        """`adaptive` 必须与 `enabled` 同等对待。
+
+        新版 Claude Code 对**不在它官方能力表里**的模型名一律发
+        `{'type': 'adaptive'}`（网关后面挂的第三方模型全部落进这一类）。
+        只认 `enabled` 时，上游照常返回 `reasoning_content`，却在网关这一跳
+        被整段丢弃 —— 现象是「思考过程不可见、`thinking_tokens` 恒为 0」。
+        """
+        self.assertTrue(A._thinking_enabled({'thinking': {'type': 'adaptive'}}))
+        self.assertTrue(A._thinking_enabled({'thinking': {'type': 'ADAPTIVE'}}))
+        self.assertTrue(A._thinking_enabled(
+            {'thinking': {'type': 'adaptive', 'display': 'omitted'}}))
 
     def test_not_enabled(self) -> None:
         for body in ({}, {'thinking': None}, {'thinking': {}},
