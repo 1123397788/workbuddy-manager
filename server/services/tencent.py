@@ -647,10 +647,32 @@ async def fetch_models(auth: dict) -> tuple[bool, list | str]:
                 continue
             merged[mid] = items[mid]
             order.append(mid)
+    for mid, item in merged.items():
+        item.update(_image_capability(ent_items.get(mid), v3_items.get(mid)))
     out = [merged[i] for i in order]
     if not out:
         return False, '模型接口未返回任何可用模型'
     return True, out
+
+
+def _image_capability(enterprise: dict | None, config_v3: dict | None) -> dict:
+    """Platform image-input declarations, not native model multimodality.
+
+    Contradictory official declarations are unknown, never silently overridden.
+    Missing/malformed values remain unknown rather than becoming False or True.
+    """
+    sources = {}
+    for label, item in (('enterprise_models', enterprise), ('v3_config', config_v3)):
+        if item is not None:
+            value = item.get('supports_images')
+            sources[label] = value if type(value) is bool else None
+    known = {v for v in sources.values() if type(v) is bool}
+    conflict = len(known) > 1
+    return {
+        'supports_images': next(iter(known)) if len(known) == 1 else None,
+        'image_input_conflict': conflict,
+        'image_input_sources': sources,
+    }
 
 
 def _parse_model_payload(data: object, realm: Realm) -> tuple[dict[str, dict], list[str]]:
@@ -705,8 +727,8 @@ def _parse_model_payload(data: object, realm: Realm) -> tuple[dict[str, dict], l
             # 推理默认档位（上游 2026-09-14 起解析并用于 thinking 决策）。
             # 空 = 上游未声明，此时上游会回退到自己的硬编码默认。
             'default_effort': str(reasoning.get('defaultEffort') or '').strip(),
-            # 多模态能力：官方 /v1/models 也透出该字段（supports_images）
-            'supports_images': bool(m.get('supportsImages')),
+            # 官方平台图片输入声明；不代表模型原生多模态能力。
+            'supports_images': m.get('supportsImages') if type(m.get('supportsImages')) is bool else None,
             # ── 以下为上游 2026-09-15 补齐的模型目录字段（我们直连腾讯，本就能取到）──
             # 说明：字段名照上游 dynModelEntry 的 JSON 标签（descriptionZh / credits /
             # tags / vendor …），那是它从同一接口解析出来的实测结果，不是猜的。

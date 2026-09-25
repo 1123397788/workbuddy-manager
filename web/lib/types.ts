@@ -216,8 +216,13 @@ export interface CatalogModel {
   reasoning_summary?: string;
   /** 默认推理档位；空串 = 上游未声明（由上游自行回退到硬编码默认） */
   default_effort: string;
-  /** 是否支持图片输入（多模态） */
-  supports_images: boolean;
+  /** 平台声明的图片输入能力；null 表示未知或冲突，不代表模型原生多模态 */
+  supports_images: boolean | null;
+  native_modality?: 'text' | 'multimodal' | 'router' | 'unknown';
+  native_modality_source?: string;
+  native_modality_verified_at?: string;
+  image_input_conflict?: boolean;
+  image_input_sources?: Record<string, boolean | null>;
   /** 系列归属（按 id 前缀推导，仅用于分组浏览） */
   series: string;
 }
