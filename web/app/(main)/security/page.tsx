@@ -284,11 +284,17 @@ export default function SecurityPage() {
                     <TableCell className="text-xs text-muted-foreground">{fmtDateTime(r.created_at)}</TableCell>
                     {isAdmin && (
                       <TableCell className="pr-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 rounded-md text-red-500 hover:text-red-600"
-                          onClick={async () => {
+                        {/* 二次确认是 README 明确承诺过的（「危险操作一律二次确认」），
+                            而删 IP 规则此前是唯一漏网的一处：点一下就直接删了。
+                            改的是**访问控制**——删掉一条 deny 规则等于当场放行该网段，
+                            删掉一条 allow 规则等于当场把该网段关在门外，两者都不该由
+                            一次误点决定。 */}
+                        <ConfirmDialog
+                          title={t('security.deleteRuleTitle')}
+                          description={t('security.deleteRuleDesc')}
+                          confirmText={t('keys.delete')}
+                          destructive
+                          onConfirm={async () => {
                             try {
                               await securityApi.removeRule(r.id);
                               notify.ok(t('keys.deleted'));
@@ -297,9 +303,16 @@ export default function SecurityPage() {
                               notify.err(errText(e));
                             }
                           }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-md text-red-500 hover:text-red-600"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          }
+                        />
                       </TableCell>
                     )}
                   </TableRow>

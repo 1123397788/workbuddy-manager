@@ -30,6 +30,11 @@
     "partialFailed": "部分数据加载失败",
     "retry": "重试"
   },
+  "error": {
+    "crashTitle": "这个页面出错了",
+    "crashHint": "可以先点「重试」；如果反复出现，请把浏览器控制台里的报错一并反馈——只描述现象很难定位。",
+    "forbidden": "权限不足：当前账号不能执行这个操作"
+  },
   "nav": {
     "dashboard": "仪表盘",
     "accounts": "账号",
@@ -616,7 +621,9 @@
     "reasonTooManyIps": "密钥绑定的 IP 数超出上限",
     "reasonRealmMismatch": "模型版本与密钥限定不符",
     "reasonModelNotAllowed": "模型不在密钥白名单内",
-    "accessLogScope": "仅记录被拦截的请求；放行的调用见「请求日志」页"
+    "accessLogScope": "仅记录被拦截的请求；放行的调用见「请求日志」页",
+    "deleteRuleTitle": "删除这条 IP 规则？",
+    "deleteRuleDesc": "删除后立即生效：该网段不再受这条规则约束（放行或拦截都随之取消）。"
   },
   "models": {
     "title": "模型中心",
@@ -689,10 +696,6 @@
     "currentModel": "当前模型",
     "supportsEfforts": "，支持推理档位 {efforts}",
     "copyAnswer": "复制回答",
-    "goodAnswer": "回答不错",
-    "badAnswer": "回答有问题",
-    "feedbackRecorded": "已记录反馈",
-    "feedbackDetail": "可到设置页的反馈入口提交详情",
     "creditTitle": "本次调用的实际扣费（上游 usage.credit）",
     "modelsAvailable": "共 {n} 个可用模型",
     "noModels": "未取到模型，请检查「模型中心」",
@@ -1062,7 +1065,6 @@
     "usersRequired": "请填写用户名与密码",
     "usersCreated": "用户已创建",
     "resetPassword": "重置密码",
-    "resetPasswordPrompt": "为「{name}」设置新密码（至少 8 位）：",
     "passwordUpdated": "密码已更新",
     "passwordRelogin": "当前登录状态已失效，请用新密码重新登录",
     "passwordOthersRevoked": "该用户的其他登录状态已全部失效",
@@ -1126,7 +1128,10 @@
     "tokensCopied": "已复制",
     "tokensEnable": "启用",
     "tokensDisable": "停用",
-    "tokensSessionOnlyHint": "更新、清空日志、用户管理等高危接口仍需会话登录，令牌无法调用。"
+    "tokensSessionOnlyHint": "更新、清空日志、用户管理等高危接口仍需会话登录，令牌无法调用。",
+    "resetPasswordTitle": "重置「{name}」的密码",
+    "resetPasswordDesc": "设置后该用户的既有登录会全部失效；至少 8 位。",
+    "newPasswordPlaceholder": "新密码（至少 8 位）"
   },
   "redPacket": {
     "title": "红包",
