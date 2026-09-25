@@ -9,6 +9,9 @@
  *
  * 默认上游不可编辑也不可删除：它是环境变量 / 上游 config.json 的运行时映射，
  * 不是数据库里的一行（所以列表里只展示它，并单独标注）。
+ *
+ * 表单抽在 UpstreamFormDialog（账号页的「添加分组」用同一个）——这里的账号目录
+ * 字段就是账号页分组的落点所在，两处必须是一份实现。
  */
 import {useCallback, useEffect, useState} from 'react';
 
@@ -19,29 +22,7 @@ import type {UpstreamEndpoint} from '@/lib/types';
 import {Badge} from '@/components/ui/badge';
 import {Button} from '@/components/ui/button';
 import {ConfirmDialog} from '@/components/common/layout/ConfirmDialog';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/animate-ui/radix/dialog';
-import {Input} from '@/components/ui/input';
-import {Label} from '@/components/ui/label';
-import {Switch} from '@/components/ui/switch';
-import {Textarea} from '@/components/ui/textarea';
-
-interface FormState {
-  name: string;
-  base_url: string;
-  api_key: string;
-  note: string;
-  enabled: boolean;
-}
-
-const emptyForm: FormState = {name: '', base_url: '', api_key: '', note: '', enabled: true};
+import {UpstreamFormDialog} from '@/components/common/upstreams/UpstreamFormDialog';
 
 export function UpstreamEndpoints() {
   const t = useT();
@@ -49,7 +30,6 @@ export function UpstreamEndpoints() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<UpstreamEndpoint | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm);
   const [busy, setBusy] = useState(false);
   const [probing, setProbing] = useState<number | null>(null);
 
@@ -73,45 +53,12 @@ export function UpstreamEndpoints() {
 
   function openCreate() {
     setEditing(null);
-    setForm(emptyForm);
     setFormOpen(true);
   }
 
   function openEdit(item: UpstreamEndpoint) {
     setEditing(item);
-    setForm({
-      name: item.name,
-      base_url: item.base_url,
-      // 不回填明文（接口只回脱敏值）：留空 = 不修改，见 submit 的注释
-      api_key: '',
-      note: item.note || '',
-      enabled: item.enabled,
-    });
     setFormOpen(true);
-  }
-
-  async function submit() {
-    if (busy) return;
-    if (!form.name.trim() || !form.base_url.trim()) {
-      notify.err(t('upstreams.nameUrlRequired'));
-      return;
-    }
-    setBusy(true);
-    try {
-      if (editing) {
-        await upstreamsApi.update(editing.id as number, form);
-        notify.ok(t('upstreams.updated'));
-      } else {
-        await upstreamsApi.create(form);
-        notify.ok(t('upstreams.created'));
-      }
-      setFormOpen(false);
-      await load();
-    } catch (e) {
-      notify.err(errText(e));
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function remove(item: UpstreamEndpoint) {
@@ -184,6 +131,18 @@ export function UpstreamEndpoints() {
                 <div className="truncate font-mono text-[11px] text-muted-foreground">
                   {item.base_url}
                 </div>
+                {item.auth_dir ? (
+                  <div
+                    className="truncate font-mono text-[11px] text-muted-foreground/80"
+                    title={t('upstreams.dirLine', {dir: item.auth_dir})}
+                  >
+                    {t('upstreams.dirLine', {dir: item.auth_dir})}
+                  </div>
+                ) : (
+                  <div className="truncate text-[11px] text-muted-foreground/70">
+                    {t('upstreams.noDirLine')}
+                  </div>
+                )}
                 {item.note ? (
                   <div className="truncate text-[11px] text-muted-foreground">{item.note}</div>
                 ) : null}
@@ -208,7 +167,8 @@ export function UpstreamEndpoints() {
                     destructive
                     onConfirm={() => remove(item)}
                     trigger={
-                      <Button variant="ghost" className="rounded-full text-destructive">
+                      <Button variant="ghost" className="rounded-full text-destructive"
+                              disabled={busy}>
                         {t('upstreams.remove')}
                       </Button>
                     }
@@ -222,71 +182,12 @@ export function UpstreamEndpoints() {
 
       <p className="text-[11px] leading-4 text-muted-foreground">{t('upstreams.hint')}</p>
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-[420px]" showCloseButton>
-          <DialogHeader>
-            <DialogTitle>{editing ? t('upstreams.editTitle') : t('upstreams.addTitle')}</DialogTitle>
-            <DialogDescription>{t('upstreams.formDesc')}</DialogDescription>
-          </DialogHeader>
-          <DialogBody className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldName')}</Label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({...form, name: e.target.value})}
-                placeholder={t('upstreams.fieldNamePlaceholder')}
-                maxLength={64}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldUrl')}</Label>
-              <Input
-                value={form.base_url}
-                onChange={(e) => setForm({...form, base_url: e.target.value})}
-                placeholder="http://127.0.0.1:7863"
-                maxLength={500}
-              />
-              <p className="text-[10px] leading-4 text-muted-foreground">
-                {t('upstreams.fieldUrlHint')}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldKey')}</Label>
-              <Input
-                value={form.api_key}
-                onChange={(e) => setForm({...form, api_key: e.target.value})}
-                // 编辑既有上游时不回填明文（接口只回脱敏值），把当前值显示在占位里，
-                // 「留空 = 不修改」
-                placeholder={editing && editing.has_key
-                  ? t('upstreams.fieldKeyKeep', {masked: editing.api_key_masked})
-                  : t('upstreams.fieldKeyPlaceholder')}
-                maxLength={500}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldNote')}</Label>
-              <Textarea
-                value={form.note}
-                onChange={(e) => setForm({...form, note: e.target.value})}
-                maxLength={200}
-                rows={2}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldEnabled')}</Label>
-              <Switch checked={form.enabled} onCheckedChange={(v) => setForm({...form, enabled: v})} />
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="outline" className="rounded-full" onClick={() => setFormOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button className="rounded-full" disabled={busy} onClick={submit}>
-              {t('common.save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UpstreamFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        editing={editing}
+        onSaved={() => void load()}
+      />
     </section>
   );
 }

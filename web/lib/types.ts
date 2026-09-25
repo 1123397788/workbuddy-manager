@@ -129,6 +129,15 @@ export interface AccountsResponse {
   pool_synced?: number;
   /** 上游是否可达 */
   pool_available?: boolean;
+  /**
+   * 分组上下文（多账号池）：这次列表来自哪个分组。默认分组也带这个字段
+   * （is_default = true）——界面靠它标注「本列表属于哪一组」。
+   */
+  upstream?: {id: number | null; name: string; is_default: boolean};
+  /** 该分组的本地账号目录；空串 = 未配置（该分组在面板里只能看、不能管理账号） */
+  auth_dir?: string;
+  /** 该分组能否在面板管理账号（= 配置了本地账号目录） */
+  manageable?: boolean;
 }
 
 /** 上游为一组账号给出的计数（`/status` 的顶层汇总与 realm_totals 同构） */
@@ -283,6 +292,16 @@ export interface UpstreamEndpoint {
   note: string;
   enabled: boolean;
   is_default: boolean;
+  /**
+   * 该分组的**本地账号目录**（绝对路径）：面板按它列账号 / 添号 / 移动账号。
+   * 空串 = 该分组只用于密钥转发，不管账号。默认分组 = 部署时的 WB_AUTH_DIR。
+   */
+  auth_dir: string;
+  /**
+   * 该分组上游实例的容器名（可选）：面板「重启该分组」按它 docker restart。
+   * 空串 = 不能从面板重启（账号文件的增删改由上游热加载自动收录）。
+   */
+  container: string;
   /** 有多少把密钥绑定在它上面（默认上游那行 = 未绑定上游的密钥数） */
   bound_keys: number;
   created_at?: number | null;

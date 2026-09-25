@@ -360,7 +360,19 @@
     "deleted": "삭제됨",
     "movedTo": "출석 결과와 업스트림 자동 작업 기록은 다음 위치로 이동했습니다:",
     "badgeDegraded": "● 연속 실패로 제외됨",
-    "degradedReason": "{n}회 연속 실패로 계정 풀에서 일시 제외되었습니다. 잠시 후 자동으로 복구됩니다. 반복된다면 토큰이 만료되지 않았는지 확인하세요(재로그인 필요)"
+    "degradedReason": "{n}회 연속 실패로 계정 풀에서 일시 제외되었습니다. 잠시 후 자동으로 복구됩니다. 반복된다면 토큰이 만료되지 않았는지 확인하세요(재로그인 필요)",
+    "groupDefault": "기본 그룹",
+    "groupAdd": "그룹 추가",
+    "groupDisabledSuffix": " (사용 안 함)",
+    "groupNoDir": "그룹 \"{name}\"에 로컬 계정 디렉터리가 없습니다: 여기서는 보기만 가능하고 계정 추가·이동·삭제는 할 수 없습니다. 「설정 → 업스트림」에서 지정하세요(해당 업스트림 인스턴스의 auths 디렉터리와 일치해야 합니다).",
+    "move": "그룹으로 이동",
+    "moveTitle": "계정 \"{name}\" 이동",
+    "moveDesc": "계정 파일을 다른 그룹으로 이동합니다. 자격 증명은 변경되지 않으며, 이동 후에는 대상 그룹의 키에만 사용됩니다.",
+    "moveTargetLabel": "대상 그룹",
+    "movePick": "그룹 선택…",
+    "moveNoDirSuffix": " (계정 디렉터리 없음)",
+    "moveConfirm": "이동",
+    "moved": "\"{name}\"(으)로 이동했습니다"
   },
   "keys": {
     "title": "API 키",
@@ -510,7 +522,16 @@
     "updated": "저장했습니다",
     "deleted": "삭제했습니다",
     "nameUrlRequired": "이름과 베이스 URL은 필수입니다",
-    "hint": "키를 업스트림에 연결하면 그 요청은 해당 풀만 사용합니다. 연결하지 않으면 기본 업스트림을 사용합니다."
+    "hint": "키를 업스트림에 연결하면 그 요청은 해당 풀만 사용합니다. 연결하지 않으면 기본 업스트림을 사용합니다.",
+    "fieldDir": "계정 디렉터리",
+    "fieldDirPlaceholder": "/opt/workbuddy2api-g2/auths",
+    "fieldDirHint": "이 그룹 업스트림 인스턴스의 auths 디렉터리(절대 경로). 계정 페이지가 여기서 목록·추가·이동을 수행합니다. 비우면 키 전달 전용입니다(계정 관리 안 함).",
+    "fieldContainer": "컨테이너 이름(선택)",
+    "fieldContainerPlaceholder": "workbuddy2api-g2",
+    "fieldContainerHint": "입력하면 패널에서 이 그룹을 재시작할 수 있습니다. 비우면 계정 파일 변경은 업스트림 핫 리로드(약 5초)로 반영됩니다.",
+    "formGroupHint": "그룹 하나 = 독립된 업스트림 인스턴스 하나(전용 포트·auths 디렉터리·api_key). 계정 풀을 실제로 분리하려면 서버에 workbuddy2api를 한 벌 더 배포하고 주소·키·계정 디렉터리를 여기에 입력하세요.",
+    "dirLine": "계정 디렉터리: {dir}",
+    "noDirLine": "계정 디렉터리 없음(키 전달 전용)"
   },
   "logs": {
     "cacheShort": "캐시 {pct}%",

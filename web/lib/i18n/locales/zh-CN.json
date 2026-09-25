@@ -360,7 +360,19 @@
     "deleted": "已删除",
     "movedTo": "签到结果与上游自动任务记录已移至",
     "badgeDegraded": "● 连败降权",
-    "degradedReason": "连续 {n} 次失败后已被临时移出账号池，稍后会自动恢复。若反复出现，请检查该账号的令牌是否失效（需要重新登录）"
+    "degradedReason": "连续 {n} 次失败后已被临时移出账号池，稍后会自动恢复。若反复出现，请检查该账号的令牌是否失效（需要重新登录）",
+    "groupDefault": "默认分组",
+    "groupAdd": "添加分组",
+    "groupDisabledSuffix": "（已停用）",
+    "groupNoDir": "分组「{name}」未配置本地账号目录：这里只能查看，不能添加 / 移动 / 删除账号。请到「设置 → 上游」为它填写账号目录（与那套上游实例的 auths 目录一致）。",
+    "move": "移动到分组",
+    "moveTitle": "移动账号「{name}」",
+    "moveDesc": "把账号文件转移到另一个分组——凭证一个字节不改；移动后它只服务目标分组的密钥。",
+    "moveTargetLabel": "目标分组",
+    "movePick": "选择分组…",
+    "moveNoDirSuffix": "（未配置账号目录）",
+    "moveConfirm": "移动",
+    "moved": "已移动到「{name}」"
   },
   "keys": {
     "title": "API 密钥",
@@ -510,7 +522,16 @@
     "updated": "已保存上游",
     "deleted": "已删除上游",
     "nameUrlRequired": "名称与上游地址都不能为空",
-    "hint": "密钥绑定上游后，它的请求只走该上游的账号池；未绑定 = 默认上游。"
+    "hint": "密钥绑定上游后，它的请求只走该上游的账号池；未绑定 = 默认上游。",
+    "fieldDir": "账号目录",
+    "fieldDirPlaceholder": "/opt/workbuddy2api-g2/auths",
+    "fieldDirHint": "该分组上游实例的 auths 目录（绝对路径）。账号页按它列号 / 加号 / 移动账号；留空 = 该分组只用于密钥转发，不管账号。",
+    "fieldContainer": "容器名（可选）",
+    "fieldContainerPlaceholder": "workbuddy2api-g2",
+    "fieldContainerHint": "填了就能从面板「重启」该分组；留空时账号文件的增删改由上游热加载自动收录（约 5 秒）。",
+    "formGroupHint": "一个分组 = 一套独立的上游实例（自己的端口、auths 目录与 api_key）。要真正隔离账号池，请在服务器上再部署一套 workbuddy2api，把它的地址、密钥和账号目录填在这里。",
+    "dirLine": "账号目录：{dir}",
+    "noDirLine": "未配置账号目录（仅用于密钥转发）"
   },
   "logs": {
     "cacheShort": "缓存 {pct}%",

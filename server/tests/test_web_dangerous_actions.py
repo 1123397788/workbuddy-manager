@@ -137,16 +137,20 @@ class DangerousActionTest(unittest.TestCase):
         """新判据同样要有正/反对照（理由同 `test_helper_discriminates`）。
 
         正例：`UpstreamEndpoints.tsx` 的 `remove` —— 具名函数、被 `onConfirm` 引用；
-        反例：同文件的 `create` —— 由普通按钮触发，不该被判成「在弹窗内」。
+        反例：同文件的 `probe` —— 由普通按钮触发，不该被判成「在弹窗内」。
 
         这条判据是合并 #87 与 #89 时补的：扫描器原本只认「调用点写在 JSX 子块里」，
         于是把上游删除那个**真有弹窗**的写法报成了漏网（回归守卫自己先红了）。
+
+        反例原先用的是同文件的 `create`；账号分组把表单抽成公共的
+        `UpstreamFormDialog`（账号页与设置页共用），`create` 随之搬去那边 ——
+        这里改用同样由普通按钮触发、且仍留在本文件的 `probe`，判据意图不变。
         """
         src = _read(_ROOT / 'web' / 'components' / 'settings' / 'UpstreamEndpoints.tsx')
         pos = src.index('upstreamsApi.remove(')
         self.assertTrue(_wired_into_confirm(src, pos), '删除上游应判定为「在确认弹窗内」')
-        other = src.index('upstreamsApi.create(')
-        self.assertFalse(_wired_into_confirm(src, other), '新增上游不该被判定为在弹窗内')
+        other = src.index('upstreamsApi.probe(')
+        self.assertFalse(_wired_into_confirm(src, other), '探测上游不该被判定为在弹窗内')
 
     def test_security_rule_delete_is_confirmed(self) -> None:
         """删 IP 规则必须二次确认。

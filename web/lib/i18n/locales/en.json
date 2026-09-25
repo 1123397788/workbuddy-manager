@@ -384,7 +384,19 @@
     "deleted": "Deleted",
     "movedTo": "Check-in results and upstream task logs moved to",
     "badgeDegraded": "● Degraded (consecutive failures)",
-    "degradedReason": "Temporarily removed from the account pool after {n} consecutive failures; it recovers automatically. If this keeps happening, check whether the account's token has expired (re-login required)"
+    "degradedReason": "Temporarily removed from the account pool after {n} consecutive failures; it recovers automatically. If this keeps happening, check whether the account's token has expired (re-login required)",
+    "groupDefault": "Default group",
+    "groupAdd": "Add group",
+    "groupDisabledSuffix": " (disabled)",
+    "groupNoDir": "Group \"{name}\" has no local account directory: you can only view accounts here, not add, move or delete them. Set one under Settings → Upstreams (it must match that upstream instance's auths directory).",
+    "move": "Move to group",
+    "moveTitle": "Move account \"{name}\"",
+    "moveDesc": "Moves the account file to another group. Credentials are not changed; afterwards it only serves keys bound to the target group.",
+    "moveTargetLabel": "Target group",
+    "movePick": "Pick a group…",
+    "moveNoDirSuffix": " (no account directory)",
+    "moveConfirm": "Move",
+    "moved": "Moved to \"{name}\""
   },
   "keys": {
     "title": "API keys",
@@ -534,7 +546,16 @@
     "updated": "Upstream saved",
     "deleted": "Upstream deleted",
     "nameUrlRequired": "Name and upstream URL are both required",
-    "hint": "A key bound to an upstream only uses that pool; unbound keys use the default upstream."
+    "hint": "A key bound to an upstream only uses that pool; unbound keys use the default upstream.",
+    "fieldDir": "Account directory",
+    "fieldDirPlaceholder": "/opt/workbuddy2api-g2/auths",
+    "fieldDirHint": "The auths directory (absolute path) of this group's upstream instance. The accounts page lists, adds and moves accounts there; leave empty to use this group for key forwarding only.",
+    "fieldContainer": "Container name (optional)",
+    "fieldContainerPlaceholder": "workbuddy2api-g2",
+    "fieldContainerHint": "Fill it in to restart this group from the panel; otherwise account file changes are picked up by the upstream's hot reload (~5s).",
+    "formGroupHint": "One group = one standalone upstream instance (its own port, auths directory and api_key). To truly isolate account pools, deploy another workbuddy2api on the server and fill in its address, key and account directory here.",
+    "dirLine": "Account dir: {dir}",
+    "noDirLine": "No account directory (key forwarding only)"
   },
   "logs": {
     "cacheShort": "cache {pct}%",

@@ -360,7 +360,19 @@
     "deleted": "已刪除",
     "movedTo": "簽到結果與上游自動任務紀錄已移至",
     "badgeDegraded": "● 連敗降權",
-    "degradedReason": "連續 {n} 次失敗後已被暫時移出帳號池，稍後會自動恢復。若反覆出現，請檢查該帳號的權杖是否失效（需要重新登入）"
+    "degradedReason": "連續 {n} 次失敗後已被暫時移出帳號池，稍後會自動恢復。若反覆出現，請檢查該帳號的權杖是否失效（需要重新登入）",
+    "groupDefault": "預設分組",
+    "groupAdd": "新增分組",
+    "groupDisabledSuffix": "（已停用）",
+    "groupNoDir": "分組「{name}」未設定本機帳號目錄：這裡只能檢視，不能新增 / 移動 / 刪除帳號。請到「設定 → 上游」為它填寫帳號目錄（與那套上游實例的 auths 目錄一致）。",
+    "move": "移動到分組",
+    "moveTitle": "移動帳號「{name}」",
+    "moveDesc": "把帳號檔案轉移到另一個分組——憑證一個位元組都不改；移動後它只服務目標分組的密鑰。",
+    "moveTargetLabel": "目標分組",
+    "movePick": "選擇分組…",
+    "moveNoDirSuffix": "（未設定帳號目錄）",
+    "moveConfirm": "移動",
+    "moved": "已移動到「{name}」"
   },
   "keys": {
     "title": "API 金鑰",
@@ -510,7 +522,16 @@
     "updated": "已儲存上游",
     "deleted": "已刪除上游",
     "nameUrlRequired": "名稱與上游位址都不能為空",
-    "hint": "密鑰綁定上游後，它的請求只走該上游的帳號池；未綁定 = 預設上游。"
+    "hint": "密鑰綁定上游後，它的請求只走該上游的帳號池；未綁定 = 預設上游。",
+    "fieldDir": "帳號目錄",
+    "fieldDirPlaceholder": "/opt/workbuddy2api-g2/auths",
+    "fieldDirHint": "該分組上游實例的 auths 目錄（絕對路徑）。帳號頁按它列號 / 加號 / 移動帳號；留空 = 該分組只用於密鑰轉發、不管帳號。",
+    "fieldContainer": "容器名稱（可選）",
+    "fieldContainerPlaceholder": "workbuddy2api-g2",
+    "fieldContainerHint": "填了就能從面板「重啟」該分組；留空時帳號檔案的增刪改由上游熱載入自動收錄（約 5 秒）。",
+    "formGroupHint": "一個分組 = 一套獨立的上游實例（自己的埠、auths 目錄與 api_key）。要真正隔離帳號池，請在伺服器上再部署一套 workbuddy2api，把它的位址、密鑰和帳號目錄填在這裡。",
+    "dirLine": "帳號目錄：{dir}",
+    "noDirLine": "未設定帳號目錄（僅用於密鑰轉發）"
   },
   "logs": {
     "cacheShort": "快取 {pct}%",

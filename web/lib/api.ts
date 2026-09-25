@@ -130,13 +130,29 @@ export const authApi = {
 };
 
 /* ── 账号 ───────────────────────────────────────────── */
+/**
+ * 账号接口的分组参数（`?upstream_id=`）。默认分组（null / undefined）= 不带
+ * 参数，与升级前的请求逐字一致——「默认分组的定义」只有后端一份（upstreamsvc）。
+ */
+const groupQs = (upstreamId?: number | null): string =>
+  upstreamId == null ? '' : `?upstream_id=${encodeURIComponent(String(upstreamId))}`;
+
 export const accountApi = {
-  list: () => get<AccountsResponse>('/api/accounts'),
+  /**
+   * 某分组的账号列表。upstreamId 省略 / null = 默认分组。
+   *
+   * 「分组」= 一套上游实例（账号池）：账号文件读该分组的目录、运行状态问该
+   * 分组的上游。两者必须成对——只换其中一个会把别的组的账号标错状态。
+   */
+  list: (upstreamId?: number | null) =>
+    get<AccountsResponse>('/api/accounts',
+                          upstreamId == null ? undefined : {upstream_id: upstreamId}),
   /** 发起扫码登录；realm 决定国内版 / 国际版端点 */
-  start: (realm: Realm = 'cn') =>
-    post<{state: string; authUrl: string; realm: Realm}>('/api/auth/start', {realm}),
+  start: (realm: Realm = 'cn', upstreamId?: number | null) =>
+    post<{state: string; authUrl: string; realm: Realm}>(
+      '/api/auth/start' + groupQs(upstreamId), {realm}),
   /** 轮询扫码结果。region 仅国际版需要（新号必须先做地区注册） */
-  poll: (state: string, realm?: Realm, region?: string) =>
+  poll: (state: string, realm?: Realm, region?: string, upstreamId?: number | null) =>
     get<{
       status: 'waiting' | 'success' | 'expired' | 'invalid' | 'realm_mismatch';
       uid?: string;
@@ -146,23 +162,36 @@ export const accountApi = {
       region_note?: string;
       expected?: Realm;
       got?: Realm;
-    }>('/api/auth/poll', {state, realm, region}),
-  remove: (file: string) => del<{success: boolean}>(`/api/accounts/${encodeURIComponent(file)}`),
+    }>('/api/auth/poll', {state, realm, region, upstream_id: upstreamId ?? undefined}),
+  remove: (file: string, upstreamId?: number | null) =>
+    del<{success: boolean}>(`/api/accounts/${encodeURIComponent(file)}${groupQs(upstreamId)}`),
+  /**
+   * 把账号**移动**到另一个分组（账号页「移动到分组…」）。
+   *
+   * 后端移动的是账号文件本身（凭证不改一个字节）；`toUpstreamId = 0` 表示
+   * 移回默认分组（见 routers/accounts.py 的 move 端点）。upstreamId = 源分组。
+   */
+  move: (file: string, toUpstreamId: number, upstreamId?: number | null) =>
+    post<{ok: boolean; file: string; uid: string;
+          from: {id: number | null; name: string};
+          to: {id: number | null; name: string}}>(
+      `/api/accounts/${encodeURIComponent(file)}/move${groupQs(upstreamId)}`,
+      {to_upstream_id: toUpstreamId}),
   /** 临时禁用 / 启用账号（issue #21）：改文件名 + 触发上游重载。 */
-  setDisabled: (file: string, disabled: boolean) =>
+  setDisabled: (file: string, disabled: boolean, upstreamId?: number | null) =>
     post<{ok: boolean; file: string; disabled: boolean; changed: boolean;
           reload_triggered: boolean; message: string}>(
-      `/api/accounts/${encodeURIComponent(file)}/disabled`, {disabled}),
-  checkin: (file: string) =>
+      `/api/accounts/${encodeURIComponent(file)}/disabled${groupQs(upstreamId)}`, {disabled}),
+  checkin: (file: string, upstreamId?: number | null) =>
     post<{
       code: number;
       message: string;
       /** 今天已经签过：后端没打上游请求，直接就地返回。提示语要与「刚签上」分开 */
       already?: boolean;
       credits?: number | null;
-    }>(`/api/accounts/${encodeURIComponent(file)}/checkin`),
+    }>(`/api/accounts/${encodeURIComponent(file)}/checkin${groupQs(upstreamId)}`),
   /** 单个账号的实时积分（直接向腾讯查询） */
-  credits: (file: string) =>
+  credits: (file: string, upstreamId?: number | null) =>
     get<{
       ok: boolean;
       credits: number | null;
@@ -170,18 +199,20 @@ export const accountApi = {
       cached: boolean;
       cache_age: number | null;
       expiries?: CreditExpiry[];
-    }>(`/api/accounts/${encodeURIComponent(file)}/credits`),
+    }>(`/api/accounts/${encodeURIComponent(file)}/credits`,
+       upstreamId == null ? undefined : {upstream_id: upstreamId}),
   /** 并发刷新所有账号的实时积分 */
   /** 查询全部账号积分；force=false 时 60 秒内命中服务端缓存 */
-  refreshCredits: (force = true) =>
+  refreshCredits: (force = true, upstreamId?: number | null) =>
     post<{
       total: number;
       succeeded: number;
       credits: Record<string, number | null>;
       meta: Record<string, CreditsMeta>;
       failed: string[];
-    }>('/api/accounts/refresh-credits' + (force ? '?force=true' : '?force=false')),
-  checkinAll: () =>
+    }>('/api/accounts/refresh-credits?force=' + (force ? 'true' : 'false')
+       + (upstreamId == null ? '' : `&upstream_id=${encodeURIComponent(String(upstreamId))}`)),
+  checkinAll: (upstreamId?: number | null) =>
     post<{
       /**
        * 只统计**本次真正发起签到**的账号：国际版（不适用）与今天已签到的都不进
@@ -198,7 +229,7 @@ export const accountApi = {
         nickname: string; ok: boolean; message: string;
         code?: number; skipped?: boolean; already?: boolean;
       }[];
-    }>('/api/accounts/checkin-all'),
+    }>('/api/accounts/checkin-all' + groupQs(upstreamId)),
   /** 签到记录（分页）。days 用于时间范围筛选 */
   checkinLogs: (limit = 20, offset = 0, uid?: string, days?: number, realm?: Realm) =>
     get<CheckinLogPage>('/api/checkin-logs', {limit, offset, uid, days, realm}),
@@ -210,25 +241,28 @@ export const accountApi = {
   clearTaskLogs: () => post<{ok: boolean}>('/api/task-logs/clear'),
   upstreamLogs: (limit = 200) =>
     get<{available: boolean; lines: string[]; total: number}>('/api/upstream/logs', {limit}),
-  test: (file: string) =>
-    post<{ok: boolean; message: string}>(`/api/accounts/${encodeURIComponent(file)}/test`),
-  refresh: (file: string) =>
-    post<{ok: boolean; message: string}>(`/api/accounts/${encodeURIComponent(file)}/refresh`),
+  test: (file: string, upstreamId?: number | null) =>
+    post<{ok: boolean; message: string}>(
+      `/api/accounts/${encodeURIComponent(file)}/test${groupQs(upstreamId)}`),
+  refresh: (file: string, upstreamId?: number | null) =>
+    post<{ok: boolean; message: string}>(
+      `/api/accounts/${encodeURIComponent(file)}/refresh${groupQs(upstreamId)}`),
   /** 强制清除账号级冷却、熔断/降权与模型级限流（会重启一次上游）。 */
-  clearCooling: (file: string) =>
+  clearCooling: (file: string, upstreamId?: number | null) =>
     post<{ok: boolean; message: string; uid?: string; backup?: string}>(
-      `/api/accounts/${encodeURIComponent(file)}/clear-cooling`,
+      `/api/accounts/${encodeURIComponent(file)}/clear-cooling${groupQs(upstreamId)}`,
     ),
   /**
    * 给账号写备注（issue #67）。传空串 = 清除备注。
    * 存的是本端库、按 uid 关联——临时停用（改文件名）不会丢。
    */
-  setNote: (file: string, note: string) =>
+  setNote: (file: string, note: string, upstreamId?: number | null) =>
     put<{ok: boolean; uid: string; note: string}>(
-      `/api/accounts/${encodeURIComponent(file)}/note`,
+      `/api/accounts/${encodeURIComponent(file)}/note${groupQs(upstreamId)}`,
       {note},
     ),
-  restart: () => post<{ok: boolean; message: string}>('/api/restart'),
+  restart: (upstreamId?: number | null) =>
+    post<{ok: boolean; message: string}>('/api/restart' + groupQs(upstreamId)),
 
   /* ── 成长任务一键执行（issue #19）─────────────────────
    * 调用上游自带的 scripts/task_runner.py。full（点亮）会伪造活跃上报，
@@ -244,7 +278,10 @@ export const accountApi = {
 
 /* ── 上游状态 ───────────────────────────────────────── */
 export const upstreamApi = {
-  status: () => get<UpstreamStatus>('/api/status'),
+  /** 上游运行状态。upstreamId 非空时查**该分组**的实例（多账号池）。 */
+  status: (upstreamId?: number | null) =>
+    get<UpstreamStatus>('/api/status',
+                        upstreamId == null ? undefined : {upstream_id: upstreamId}),
   /** 上游模型简表；realm 非空时只返回该版本的条目 */
   models: (realm?: Realm) => get<ModelListResponse>('/api/models', {realm}),
 };
@@ -276,6 +313,13 @@ export type UpstreamWrite = {
   api_key?: string;
   note?: string;
   enabled?: boolean;
+  /**
+   * 该分组的本地账号目录（绝对路径）。账号页的「分组」视图按它列账号 /
+   * 添号 / 移动账号；空串 = 该分组只用于密钥转发。
+   */
+  auth_dir?: string;
+  /** 该分组上游实例的容器名（可选）：「重启该分组」按它 docker restart。 */
+  container?: string;
 };
 
 export const upstreamsApi = {
