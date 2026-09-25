@@ -6,11 +6,14 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .. import security, upstreamsvc
 from ..iputil import client_ip
+from ..services import wb2api
 
 router = APIRouter(prefix='/api/upstreams', tags=['upstreams'])
 
@@ -108,6 +111,22 @@ def update_upstream(upstream_id: int, body: UpstreamPatch, request: Request,
 @router.delete('/{upstream_id}')
 def delete_upstream(upstream_id: int, request: Request,
                     user: dict = Depends(security.require_session_admin)) -> dict:
+    upstream = upstreamsvc.get_upstream(upstream_id)
+    if upstream is None:
+        raise HTTPException(status_code=404, detail='上游不存在')
+    # 分组里还有账号时拒绝删除：删记录会让那个账号目录从面板里消失——文件仍在
+    # 磁盘上，但面板不再有它的任何入口（移不走、删不掉、也看不见），只能去
+    # 宿主机上手动处理。先把账号移走或删除，再删分组。
+    auth_dir = str(upstream.get('auth_dir') or '').strip()
+    if auth_dir:
+        remaining = len(wb2api.list_auth_accounts(Path(auth_dir)))
+        if remaining:
+            raise HTTPException(
+                status_code=409,
+                detail=(f'分组「{upstream["name"]}」里还有 {remaining} 个账号，'
+                        '先把它们移走或删除，再删除分组'
+                        '（本操作只删分组记录，不会删除账号目录与文件）'),
+            )
     deleted, used = upstreamsvc.delete_upstream(upstream_id)
     if not deleted:
         if used:

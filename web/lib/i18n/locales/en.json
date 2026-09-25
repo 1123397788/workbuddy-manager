@@ -397,7 +397,12 @@
     "moveNoDirSuffix": " (no account directory)",
     "moveConfirm": "Move",
     "moved": "Moved to \"{name}\"",
-    "groupSharedUrl": "Group \"{name}\" shares the same upstream instance as the default group: accounts moved in will not actually be used (they show as \"Not loaded\"). To use it independently, change its address under Settings → Upstreams."
+    "groupSharedUrl": "Group \"{name}\" points at the same upstream address as the default group (same instance, same account pool): accounts in this group's own directory are not loaded by it (they show as \"Not loaded\"). To actually use them, deploy another workbuddy2api on the server (set its auths directory to this group's account directory), then point this group's address at that instance.",
+    "groupDelete": "Delete group",
+    "groupDeleteTitle": "Delete group \"{name}\"",
+    "groupDeleteDesc": "Only the group record in this panel is deleted — the account directory and its files stay. Deletion is refused while the group still has accounts or bound keys (the error tells you how many; clear them first).",
+    "groupDeleted": "Group deleted",
+    "moveSharedWarn": "Heads-up: the target group shares the same upstream instance as the default group — the account will not actually be used after the move (it will show as \"Not loaded\") unless you set up a dedicated instance for that group first."
   },
   "keys": {
     "title": "API keys",
@@ -542,7 +547,7 @@
     "edit": "Edit",
     "remove": "Delete",
     "deleteTitle": "Delete upstream",
-    "deleteDesc": "Delete upstream \"{name}\"? An upstream still bound to keys cannot be deleted.",
+    "deleteDesc": "Delete upstream \"{name}\"? Deletion is refused while the group still has accounts or bound keys; clear them first.",
     "created": "Upstream added",
     "updated": "Upstream saved",
     "deleted": "Upstream deleted",

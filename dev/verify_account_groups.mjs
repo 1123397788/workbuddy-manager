@@ -161,9 +161,33 @@ await page.waitForTimeout(2500);
 text = await bodyText();
 step(/未配置本地账号目录/.test(text), '没配账号目录的分组会说明原因（只读）',
      text.split('\n').find((l) => l.includes('未配置本地账号目录')) || '');
-step(/共用同一套/.test(text), '地址与默认分组相同的分组也有常驻说明',
-     text.split('\n').find((l) => l.includes('共用同一套')) || '');
+step(/同一条上游地址/.test(text), '地址与默认分组相同的分组也有常驻说明',
+     text.split('\n').find((l) => l.includes('同一条上游地址')) || '');
 await page.screenshot({path: path.join(OUT, '06-no-dir-hint.png'), fullPage: true});
+
+// ⑤ 删除分组：空分组能删；还有账号的分组拒删
+await page.getByRole('button', {name: /删除分组/}).first().click();
+await page.waitForTimeout(700);
+const dDlg = page.locator('[role=alertdialog]').last();
+await dDlg.getByRole('button', {name: /删除分组/}).last().click();
+await page.waitForTimeout(2500);
+text = await bodyText();
+step(!text.includes('空组'), '删除分组：没有账号的分组能删掉（从切换条消失）');
+step(text.includes('默认分组'), '删除后自动回到默认分组');
+await page.screenshot({path: path.join(OUT, '07-group-deleted.png'), fullPage: true});
+
+await page.getByRole('button', {name: '甲组', exact: true}).first().click();
+await page.waitForTimeout(2200);
+await page.getByRole('button', {name: /删除分组/}).first().click();
+await page.waitForTimeout(700);
+const dDlg2 = page.locator('[role=alertdialog]').last();
+await dDlg2.getByRole('button', {name: /删除分组/}).last().click();
+await page.waitForTimeout(2500);
+text = await bodyText();
+step(text.includes('甲组') && text.includes('甲组号'),
+     '还有账号的分组拒删：分组与账号都还在（错误里会给出数量）',
+     text.split('\n').find((l) => l.includes('甲组号')) || '');
+await page.screenshot({path: path.join(OUT, '08-delete-refused.png')});
 
 step(pageErrors.length === 0, '没有未捕获的前端异常', pageErrors.slice(0, 2).join(' | '));
 

@@ -353,6 +353,45 @@ class AddAccountIntoGroupTest(_GroupCase):
         self.assertEqual(r.status_code, 404, r.text)
 
 
+# ── 5.5) 删除分组：还有账号时拒绝 ───────────────────────────
+class DeleteGroupTest(_GroupCase):
+    """删除分组的两道闸之一：**分组里还有账号就拒绝**。
+
+    为什么要有这道闸：删记录会让那个账号目录从面板里消失——文件仍在磁盘上，
+    但面板不再有它的入口（移不走、删不掉、也看不见）。允许「先清空再删」，
+    拒绝「带着账号删」。
+    """
+
+    def test_delete_refused_when_group_has_accounts(self) -> None:
+        fname = f'workbuddy-{UID_G}.json'
+        src = self._write(self.g1_dir, fname, UID_G, nickname='甲组号')
+        r = self.client.delete(f'/api/upstreams/{self.g1}')
+        self.assertEqual(r.status_code, 409, r.text)
+        self.assertIn('账号', r.json()['detail'])
+        # 拒绝时分组与账号都必须原样还在
+        self.assertIsNotNone(upstreamsvc.get_upstream(self.g1))
+        self.assertTrue(src.exists())
+
+        # 清空账号后就能删；目录与文件不受影响（这里已经被测试自己删了）
+        src.unlink()
+        r2 = self.client.delete(f'/api/upstreams/{self.g1}')
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertIsNone(upstreamsvc.get_upstream(self.g1))
+
+    def test_delete_group_without_dir_is_allowed(self) -> None:
+        r = self.client.delete(f'/api/upstreams/{self.g2}')
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIsNone(upstreamsvc.get_upstream(self.g2))
+
+    def test_disabled_account_still_counts(self) -> None:
+        """改名停用的账号（.disabled）还在目录里，同样算「还有账号」。"""
+        fname = f'workbuddy-{UID_G}.json'
+        src = self._write(self.g1_dir, fname, UID_G, nickname='甲组号')
+        src.rename(self.g1_dir / (fname + '.disabled'))
+        r = self.client.delete(f'/api/upstreams/{self.g1}')
+        self.assertEqual(r.status_code, 409, r.text)
+
+
 # ── 6) 配置语义（服务层） ──────────────────────────────────
 class UpstreamGroupFieldsTest(unittest.TestCase):
     def setUp(self) -> None:

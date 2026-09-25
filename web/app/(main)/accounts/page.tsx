@@ -297,6 +297,23 @@ export default function AccountsPage() {
     }
   }
 
+  /**
+   * 删除当前分组（只删面板记录，账号目录与文件不动）。
+   *
+   * 两道闸在后端：分组里还有账号、或有密钥绑着它 → 409 且说明数量，这里原样弹出。
+   */
+  async function deleteGroup() {
+    if (groupId == null) return;
+    try {
+      await upstreamsApi.remove(groupId);
+      notify.ok(t('accounts.groupDeleted'));
+      setGroupId(null);
+      await load();
+    } catch (e) {
+      notify.err(errText(e));
+    }
+  }
+
   /** 仅重启上游容器，不涉及单个账号，因此单独处理 */
   const [restarting, setRestarting] = useState(false);
   async function restartUpstream() {
@@ -930,6 +947,21 @@ export default function AccountsPage() {
             <Plus className="h-3.5 w-3.5" />
             {t('accounts.groupAdd')}
           </Button>
+        )}
+        {isAdmin && groupId != null && (
+          <ConfirmDialog
+            title={t('accounts.groupDeleteTitle', {name: groupInfo?.name || ''})}
+            description={t('accounts.groupDeleteDesc')}
+            confirmText={t('accounts.groupDelete')}
+            destructive
+            onConfirm={() => deleteGroup()}
+            trigger={
+              <Button variant="ghost" size="sm" className="rounded-full text-destructive">
+                <Trash2 className="h-3.5 w-3.5" />
+                {t('accounts.groupDelete')}
+              </Button>
+            }
+          />
         )}
       </div>
       {groupInfo && !groupInfo.manageable && groupId != null && (
