@@ -73,6 +73,12 @@ def _playwright_entry() -> str | None:
 
 
 def main() -> int:
+    # 控制台编码兜底：脚本输出里有 ✓ 之类的字符，GBK 控制台直接 print 会崩
+    try:
+        sys.stdout.reconfigure(errors='replace')
+    except Exception:  # noqa: BLE001
+        pass
+
     for d in (DATA, SHOTS):
         if d.exists():
             shutil.rmtree(d, ignore_errors=True)

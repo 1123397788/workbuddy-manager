@@ -94,7 +94,7 @@ await dlg.getByLabel('名称').fill('业务组').catch(async () => {
   await dlg.getByPlaceholder('例如：业务组').fill('业务组');
 });
 await dlg.getByPlaceholder('http://127.0.0.1:7863').fill(SECOND);
-await dlg.getByPlaceholder('留空 = 不带鉴权头').fill(SECRET);
+await dlg.getByPlaceholder(/留空/).fill(SECRET);  // 示例文案会随语义调整，按前缀匹配
 await dlg.getByRole('button', {name: /保存|确定|新增/}).last().click();
 await page.waitForTimeout(2000);
 await page.screenshot({path: path.join(OUT, 'created.png'), fullPage: true});
