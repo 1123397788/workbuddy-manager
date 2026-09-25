@@ -6,7 +6,7 @@ import {useHeartbeat} from '@/lib/use-heartbeat';
 import {notify} from '@/lib/toast';
 import {keyApi, errText} from '@/lib/api';
 import {BASE_PATH} from '@/lib/base-path';
-import type {ApiKey} from '@/lib/types';
+import type {ApiKey, KeyImportResult, KeyImportStatus} from '@/lib/types';
 import {fmtDateTime, fmtNumber} from '@/lib/format';
 import {PageHeader} from '@/components/common/layout/PageHeader';
 import {EmptyState} from '@/components/common/layout/EmptyState';
@@ -29,6 +29,7 @@ import {
 import {Label} from '@/components/ui/label';
 import {Textarea} from '@/components/ui/textarea';
 import {Tabs, TabsList, TabsTrigger} from '@/components/ui/tabs';
+import {Switch} from '@/components/ui/switch';
 import {
   Dialog,
   DialogBody,
@@ -111,6 +112,20 @@ export default function KeysPage() {
   /** 导出结果（原样展示的文本片段）；null = 还没导出 */
   const [exported, setExported] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  /**
+   * 本机一键导入的状态与结果。
+   *
+   * `importStatus === null` 同时表示"还没探测"和"探测失败"——两种情况界面都
+   * 按不可导入处理：这是给刚建完密钥的人加的一个便利，探测失败不该用报错
+   * 打断他（导出那条路始终可用）。
+   */
+  const [importStatus, setImportStatus] = useState<KeyImportStatus | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [imported, setImported] = useState<KeyImportResult | null>(null);
+  /** 是否把导入的供应商设为当前。默认关：这等于替用户切换正在用的供应商，
+   *  该由他自己点头，不能靠"顺手"发生。 */
+  const [importSetCurrent, setImportSetCurrent] = useState(false);
   /**
    * 模型白名单里**匹配不到已知模型**的名字（issue #46）。
    *
@@ -300,17 +315,30 @@ export default function KeysPage() {
    * 在运行、面板是否与本机同机等问题，是独立特性（见 docs 提案）。导出本身
    * 无副作用，可以放心先上。
    */
+  // 导出与导入共用同一份请求体：目标选择器（cc-switch Claude / Codex / ZCode）
+  // 同时决定"导出哪一份"和"导到哪里"。两处各写一遍迟早会漂移——后端也正是
+  // 为此把两条路收敛到同一个 helper（见 routers/keys.py 的 _client_settings）。
+  const clientBody = useCallback(() => {
+    if (!issued) return null;
+    const app = exportTarget === 'zcode' ? undefined
+      : (exportTarget === 'ccswitch-codex' ? 'codex' : 'claude');
+    const models = form.models.split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+    return exportTarget === 'zcode'
+      ? {client: 'zcode' as const, token: issued, baseUrl, models}
+      : {client: 'ccswitch' as const, app: app as 'claude' | 'codex',
+         token: issued, baseUrl, models};
+  }, [issued, exportTarget, baseUrl, form.models]);
+
+  /** 当前目标客户端名。导出、导入、自动检测三处都要用，抽出来免得各写一遍。 */
+  const importClient: 'ccswitch' | 'zcode' =
+    exportTarget === 'zcode' ? 'zcode' : 'ccswitch';
+
   const doExport = useCallback(async () => {
-    if (!issued) return;
+    const body = clientBody();
+    if (!body) return;
     setExporting(true);
     try {
-      const app = exportTarget === 'zcode' ? undefined
-        : (exportTarget === 'ccswitch-codex' ? 'codex' : 'claude');
-      const body = exportTarget === 'zcode'
-        ? {client: 'zcode' as const, token: issued}
-        : {client: 'ccswitch' as const, app: app as 'claude' | 'codex', token: issued};
-      const res = await keyApi.exportConfig({...body, baseUrl, models: form.models
-        .split(/[\n,]/).map((s) => s.trim()).filter(Boolean)});
+      const res = await keyApi.exportConfig(body);
       // 展示可直接粘贴的片段：cc-switch 用 settings_config，ZCode 用整个片段
       const payload = res.client === 'ccswitch' ? res.settings_config : res.provider;
       setExported(JSON.stringify(payload, null, 2));
@@ -320,7 +348,117 @@ export default function KeysPage() {
     } finally {
       setExporting(false);
     }
-  }, [issued, exportTarget, baseUrl, form.models, t]);
+  }, [clientBody, t]);
+
+  /**
+   * 把刚创建的密钥**一键写进本机**客户端。
+   *
+   * 失败信息原样透传服务端那句（`errText` 取的就是 detail）：后端已经写清了
+   * 是"请先退出客户端"还是"请先打开开关"，前端再包一层只会更模糊。
+   *
+   * `mode: 'auto'` 让后端自己选路：**能走客户端官方的 ccswitch:// 深链就走深链**
+   * （不用关客户端、不用改它的库、由客户端自己弹确认框），否则才直接写配置。
+   * 直写时授权 `closeRunning`——客户端开着也由它替用户关掉再拉起来，
+   * 前提是它先确认定位得到客户端（关掉却拉不起来比不改更糟，后端会拒绝）。
+   */
+  const doImport = useCallback(async () => {
+    const body = clientBody();
+    if (!body) return;
+    setImporting(true);
+    try {
+      const res = await keyApi.importLocal({
+        ...body, setCurrent: importSetCurrent, mode: 'auto', closeRunning: true,
+      });
+      setImported(res);
+      notify.ok(res.method === 'deeplink' ? t('keys.importHandedOff') : t('keys.importDone'));
+      // 写完重新探测：客户端可能被我们关了又起来，状态得跟着变
+      try {
+        setImportStatus(await keyApi.importLocalStatus());
+      } catch {
+        /* 探测失败不影响"已经写成功"这个事实，保留旧状态即可 */
+      }
+    } catch (e) {
+      notify.err(errText(e));
+    } finally {
+      setImporting(false);
+    }
+  }, [clientBody, importSetCurrent, t]);
+
+  /**
+   * 让面板自己去找客户端装在哪。
+   *
+   * 为什么需要：安装路径**因机器而异**——绿色版可能解压在 `E:\cc swich\`，
+   * 安装版在 `%LOCALAPPDATA%\Programs\…`。写死任何一个都会在别人机器上失效。
+   * 检测结果会缓存，之后导入 / 关闭 / 重新拉起都用它，所以是"点一次长期有效"。
+   */
+  const doDetect = useCallback(async () => {
+    setDetecting(true);
+    try {
+      const res = await keyApi.importLocalDetect(importClient);
+      if (!res.found) {
+        notify.warn(t('keys.detectMissing'), t('keys.detectMissingHint'));
+        return;
+      }
+      notify.ok(t('keys.detectFound'));
+      // 定位结果体现在 status 的 exe 上，重新取一次让界面跟着更新
+      try {
+        setImportStatus(await keyApi.importLocalStatus());
+      } catch {
+        /* 同上：探测失败不该把"已找到"这件事说成失败 */
+      }
+    } catch (e) {
+      notify.err(errText(e));
+    } finally {
+      setDetecting(false);
+    }
+  }, [importClient, t]);
+
+  // 弹窗打开（拿到明文）时才去探测本机状态：没建密钥的人不需要这次请求。
+  useEffect(() => {
+    if (!issued) return;
+    let alive = true;
+    keyApi.importLocalStatus()
+      .then((s) => { if (alive) setImportStatus(s); })
+      .catch(() => { if (alive) setImportStatus(null); });
+    return () => { alive = false; };
+  }, [issued]);
+
+  /** 当前目标客户端的状态；null = 未探测 / 探测失败 */
+  const importClientState = importStatus?.clients.find(
+    (c) => c.client === importClient) ?? null;
+  const importReady = !!importStatus?.enabled && !!importStatus.local_caller;
+  /**
+   * 能不能点导入。三种情况都行：
+   *  · 深链可用 —— 首选，客户端在不在跑都无所谓；
+   *  · 客户端没在跑 —— 直接写它的配置；
+   *  · 在跑但定位得到 exe —— 后端会替用户关掉、写完再拉起来。
+   * 注意深链可用时**不看 `installed`**：那指的是客户端的配置库存在与否，
+   * 而深链是客户端自己去建/去合并，不需要我们先看见那个文件。
+   */
+  const canImport = importReady
+    && (!!importClientState?.deeplink || !!importClientState?.importable
+        || !!importClientState?.needs_close);
+  /**
+   * 不能导入时要**说清是哪一条不满足**：用户照着一句话就能用上，
+   * 比一个灰按钮加一个问号有用得多。顺序 = 判定的优先级，别乱。
+   */
+  const importHint = !importStatus || !importStatus.enabled
+    ? t('keys.importHintDisabled')
+    : !importStatus.local_caller
+      ? t('keys.importHintRemote')
+      : importClientState?.deeplink
+        ? t('keys.importHintDeeplink')
+        : importClientState?.reason === 'not_installed'
+          ? t('keys.importHintNotInstalled')
+          : importClientState?.needs_close
+            ? t('keys.importHintWillClose')
+            : importClientState?.reason === 'client_running'
+              ? t('keys.importHintRunning')
+              : importClientState?.reason === 'cannot_detect'
+                ? t('keys.importHintUnknown')
+                : canImport
+                  ? t('keys.importHintReady')
+                  : t('keys.importHintUnknown');
 
   // 分组过滤。keys 的量级是「几十到几百」，一次渲染算两遍不值得上 useMemo
   // （那要多写一层依赖数组，还更容易漏依赖）。
@@ -753,32 +891,52 @@ export default function KeysPage() {
 
       {/* 一次性展示新密钥 */}
       <Dialog open={!!issued} onOpenChange={(v) => !v && (setIssued(null), setExported(null))}>
-        <DialogContent className="max-w-[520px]">
+        {/* 尺寸必须**跟着视口走**：这个弹窗里有密钥、有一整段 JSON、还有导入区，
+            内容比一般弹窗高得多。之前只写了个 max-w，高度没上限，于是窗口一矮
+            （或系统缩放一大）底部就被 `overflow-hidden` 直接裁掉，连「我已保存」
+            都点不到——只能按 Esc 关掉。现在：整体不超视口，主体自己滚动。
+            宽度：**必须连 `sm:` 一起写**。DialogContent 基类当年带了个 `sm:max-w-lg`
+            （512px），而 Tailwind 把响应式规则排在样式表更靠后的位置，于是任何
+            ≥640px 的屏幕上它都会盖过这里传的 `max-w-[…]` —— 这就是「怎么改都还是
+            窄」的原因（本轮已在组件里去掉那条冗余规则，这里再写一遍 sm: 是防它被
+            加回来）。920px 给"密钥 + JSON + 导入区"留足一行放得下的宽度，
+            仍然用 calc(100vw-2rem) 兜住小屏，不会顶到屏幕边。 */}
+        <DialogContent className="max-h-[calc(100dvh-2rem)] w-[min(920px,calc(100vw-2rem))] max-w-[min(920px,calc(100vw-2rem))] sm:max-w-[min(920px,calc(100vw-2rem))]">
           <DialogHeader>
             <DialogTitle>{t('keys.createdTitle')}</DialogTitle>
             <DialogDescription>{t('keys.createdDesc')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 px-6 pb-2">
-            {/* min-w-0 必不可少：flex 项默认 min-width:auto，长密钥会把
-                复制按钮挤出去（移动端就点不到了） */}
-            <div className="flex items-center gap-2 rounded-2xl bg-muted p-3">
-              <code className="min-w-0 flex-1 break-all font-mono text-xs">{issued}</code>
-              <CopyButton value={issued || ''} size="sm" showLabel label={t('keys.copyKey')} />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">Base URL</span>
-              <code className="min-w-0 flex-1 break-all font-mono text-[11px]">{baseUrl}/v1</code>
-              <CopyButton value={`${baseUrl}/v1`} title={t('keys.copyBaseUrl')} />
-            </div>
+          {/* 主体限高：给 header/footer 留出约 11rem，剩下的都归它。
+              用 dvh 而不是 vh：移动端浏览器工具栏收起/展开时 vh 会跳。 */}
+          <DialogBody className="max-h-[min(560px,calc(100dvh-14rem))]">
+            <div className="space-y-3 px-6 pb-3">
+              {/* min-w-0 必不可少：flex 项默认 min-width:auto，长密钥会把
+                  复制按钮挤出去（移动端就点不到了） */}
+              <div className="flex items-center gap-2 rounded-2xl bg-muted p-3">
+                <code className="min-w-0 flex-1 break-all font-mono text-xs">{issued}</code>
+                <CopyButton value={issued || ''} size="sm" showLabel label={t('keys.copyKey')} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Base URL</span>
+                <code className="min-w-0 flex-1 break-all font-mono text-[11px]">{baseUrl}/v1</code>
+                <CopyButton value={`${baseUrl}/v1`} title={t('keys.copyBaseUrl')} />
+              </div>
 
             {/* 导出为客户端配置片段（cc-switch / ZCode）。
                 只在**这一刻**可行：面板只存哈希，关掉弹窗后谁也拿不回明文。 */}
             <div className="space-y-2 rounded-2xl border p-3">
-              <div className="flex items-center justify-between gap-2">
+              {/* flex-wrap：窄宽度下让"导出"按钮掉到下一行，而不是把 select 挤扁 */}
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                 <span className="text-xs font-medium">{t('keys.exportTitle')}</span>
                 <div className="flex items-center gap-2">
                   <Select value={exportTarget}
-                          onValueChange={(v) => { setExportTarget(v as typeof exportTarget); setExported(null); }}>
+                          onValueChange={(v) => {
+                            setExportTarget(v as typeof exportTarget);
+                            // 换了目标就清掉旧结果：两个客户端的内容不一样，
+                            // 留着上一份会造成"看的是 claude、复制的是 codex"。
+                            setExported(null);
+                            setImported(null);
+                          }}>
                     <SelectTrigger className="h-7 w-[168px] rounded-full text-xs">
                       <SelectValue />
                     </SelectTrigger>
@@ -797,13 +955,102 @@ export default function KeysPage() {
               <p className="text-[11px] text-muted-foreground">{t('keys.exportHint')}</p>
               {exported ? (
                 <div className="flex items-start gap-2 rounded-xl bg-muted p-2">
-                  <Textarea readOnly value={exported}
-                            className="min-h-[120px] flex-1 font-mono text-[11px]" />
+                  {/* wrap="off"：这一段是给机器读的配置，换行会把一行拆成两行，
+                      复制出去就是坏的。宁可他横向滚动，也不要看上去"读得舒服"
+                      但实际无法直接粘贴。高度跟着视口走，别把弹窗顶长。
+                      field-sizing-fixed + min-w-0：Textarea 基类带 field-sizing-content
+                      （按内容自适应宽度），叠上 wrap="off" 后固有宽度=最长一行；
+                      而 DialogBody(Radix ScrollArea) 的内层是 display:table，按
+                      max-content 取列宽 —— 于是 Codex 那种"TOML 塞进 JSON config
+                      字段"的一整行长字符串会把整块内容撑出弹窗右缘（select 和
+                      按钮被推到画面外）。field-sizing-fixed 让它回到按 CSS 宽度
+                      （w-full）排布，min-w-0 拆掉 flex 项的 min-width:auto 兜底。 */}
+                  <Textarea readOnly wrap="off" value={exported}
+                            className="max-h-[min(240px,28dvh)] min-h-[120px] flex-1 min-w-0 field-sizing-fixed overflow-auto font-mono text-[11px] leading-relaxed" />
                   <CopyButton value={exported} size="sm" showLabel label={t('common.copy')} />
                 </div>
               ) : null}
+
+              {/* 一键导入到本机：与上面共用同一个目标选择器，区别只在去向——
+                  导出把片段给用户，导入替他落盘（或交给客户端自己导入）。
+                  门槛（开关 / 是否本机访问 / 客户端状态）全由后端判，
+                  这里只如实展示状态，免得用户点完才知道不行。 */}
+              <div className="space-y-2 border-t pt-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                  <span className="text-xs font-medium">{t('keys.importTitle')}</span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <label htmlFor="key-import-set-current"
+                           className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Switch id="key-import-set-current" checked={importSetCurrent}
+                              disabled={!canImport}
+                              onCheckedChange={setImportSetCurrent} />
+                      {t('keys.importSetCurrent')}
+                    </label>
+                    {/* 定位不到客户端时才给「自动检测」：安装路径因机器而异
+                        （绿色版可能解压在 E:\cc swich\），写死任何一个都不通用。 */}
+                    {!importClientState?.exe ? (
+                      <Button variant="outline" size="sm"
+                              className="h-7 rounded-full text-xs"
+                              onClick={doDetect}
+                              disabled={detecting || !importReady}>
+                        {detecting ? t('common.loading') : t('keys.detectBtn')}
+                      </Button>
+                    ) : null}
+                    <Button size="sm" className="h-7 rounded-full text-xs"
+                            onClick={doImport} disabled={!canImport || importing}>
+                      {importing ? t('common.loading') : t('keys.importBtn')}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{importHint}</p>
+                {/* 认到哪个可执行文件要说出来：用户才知道"关闭/重新打开"的是哪一个，
+                    也才能发现面板是不是认错了东西。 */}
+                {importClientState?.exe ? (
+                  <p className="flex gap-1.5 text-[11px] text-muted-foreground">
+                    <span className="shrink-0">{t('keys.detectLocated')}</span>
+                    <code className="min-w-0 break-all font-mono">{importClientState.exe}</code>
+                  </p>
+                ) : null}
+                {imported ? (
+                  <div className="space-y-1 rounded-xl bg-muted p-2 text-[11px]">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <CircleCheck className="size-3.5 shrink-0" />
+                      {imported.method === 'deeplink'
+                        ? t('keys.importHandedOff')
+                        : t('keys.importDone')}
+                    </div>
+                    {/* 深链没有落盘、也没有备份，就没有"写入/备份"两行可显示，
+                        换成一句"接下来该在哪点确认"——否则用户以为已经生效了。 */}
+                    {imported.method === 'deeplink' ? (
+                      <p className="text-muted-foreground">{t('keys.importDeeplinkNote')}</p>
+                    ) : (
+                      <>
+                        <div className="flex gap-1.5">
+                          <span className="shrink-0 text-muted-foreground">{t('keys.importTarget')}</span>
+                          <code className="min-w-0 break-all font-mono">{imported.target}</code>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <span className="shrink-0 text-muted-foreground">{t('keys.importBackup')}</span>
+                          <code className="min-w-0 break-all font-mono">{imported.backup}</code>
+                        </div>
+                      </>
+                    )}
+                    {/* 客户端被我们关过就一定要说：不说的话用户只会发现
+                        "我的 cc-switch 怎么没了/重启了"。拉不起来要说成警告——
+                        配置是写进去了，但工具没替他打开。 */}
+                    {imported.lifecycle?.stopped ? (
+                      imported.lifecycle.restarted
+                        ? <p className="text-muted-foreground">{t('keys.importClientRestarted')}</p>
+                        : <p className="text-amber-600 dark:text-amber-400">
+                            {t('keys.importClientClosedOnly')}
+                          </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
+            </div>
+          </DialogBody>
           <DialogFooter>
             <Button className="rounded-full" onClick={() => { setIssued(null); setExported(null); }}>
               {t('keys.savedIt')}

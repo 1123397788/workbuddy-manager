@@ -326,6 +326,94 @@ export interface KeyExportResult {
 }
 
 /**
+ * 本机一键导入：单个客户端的可写状态（见 server/services/keyimport.py）。
+ *
+ * `running` 是**三态**：true / false / null，null = 探测不到。后端把 null 也
+ * 当作"不能写"（fail-closed）：漏判的代价是写坏用户本机配置，误判的代价只是
+ * 让用户改用导出，两者不对称。
+ */
+export interface KeyImportClientStatus {
+  client: 'ccswitch' | 'zcode';
+  /** 该客户端的配置文件是否存在 */
+  installed: boolean;
+  /** 是否正在运行；null = 探测不到 */
+  running: boolean | null;
+  /** 综合结论：现在能不能*直接写*（客户端没在跑时才为 true） */
+  importable: boolean;
+  /** 不能直写的原因；可写时为空串 */
+  reason: '' | 'not_installed' | 'client_running' | 'cannot_detect';
+  /** 会被写入的文件路径 */
+  target: string;
+  /**
+   * 面板认得的可执行文件；null = 还没定位到（界面提示可点「自动检测」）。
+   * 直写模式下要在写完后把客户端拉起来，靠的就是它。
+   */
+  exe: string | null;
+  /** 上面那个路径是从哪认出来的：env / process / protocol / cache / registry / known-dir / scan */
+  exe_source: string;
+  /** 正在运行、但可以自动关闭（定位到了 exe）——界面要提前说清"会先替你关掉它" */
+  needs_close: boolean;
+  /** 本机支持客户端官方的 ccswitch:// 深链导入（首选路径：不用关客户端、不用改它的库） */
+  deeplink: boolean;
+}
+
+export interface KeyImportStatus {
+  /** 面板侧开关（WB_LOCAL_IMPORT），默认关 */
+  enabled: boolean;
+  /** 这次请求是否来自面板所在机器；false 时只能导出后手动导入 */
+  local_caller: boolean;
+  clients: KeyImportClientStatus[];
+}
+
+/**
+ * 导入结果。**不含密钥**——服务端刻意不回显：配置已经落盘，没必要再把明文
+ * 放进响应体（明文只该在「创建密钥」那一次出现）。
+ */
+export interface KeyImportResult {
+  client: 'ccswitch' | 'zcode';
+  app: '' | 'claude' | 'codex';
+  realm: 'cn' | 'global';
+  base_url: string;
+  model_count: number;
+  /**
+   * 走的是哪条路：
+   *  · `deeplink` = 把配置拼成客户端官方的 ccswitch:// 链接交给系统，
+   *    由客户端自己弹确认框、自己入库（此时 `action` 是 `handed-off`）；
+   *  · `direct`   = 面板直接改它的配置/数据库。
+   */
+  method: 'deeplink' | 'direct';
+  /** created = 新增；updated = 更新了已有项；handed-off = 已交给客户端去导入 */
+  action: 'created' | 'updated' | 'handed-off';
+  provider_id: string;
+  /** 实际写入的文件（深链模式下为空：面板没碰文件） */
+  target: string;
+  /** 写入前的备份（可据此回滚）；深链模式下为空 */
+  backup: string;
+  /** 直写模式才有的进程生命周期：是否被面板关掉/重新拉起 */
+  lifecycle: {
+    stopped: boolean;
+    forced: boolean;
+    /** null = 没关过（谈不上重开）；false = 关了但没拉起来 */
+    restarted: boolean | null;
+    exe: string;
+  } | null;
+  name?: string;
+  app_type?: 'claude' | 'codex';
+  /** 深链模式：真正接收这条链接的客户端可执行文件 */
+  handler?: string;
+}
+
+/** 自动检测客户端位置的结果（面板的「自动检测」按钮）。 */
+export interface KeyImportDetectResult {
+  client: 'ccswitch' | 'zcode';
+  found: boolean;
+  exe: string | null;
+  /** 从哪找到的；没找到时为空串。界面据此说明"是从注册表/扫描里认出来的" */
+  source: '' | 'env' | 'process' | 'protocol' | 'cache' | 'registry'
+    | 'known-dir' | 'scan';
+}
+
+/**
  * 管理面**作用域化 API Token**（见 docs/api-tokens.md）。
  *
  * 与上面那把网关密钥（`ApiKey`）是**两套东西**：`ApiKey` 只授权模型调用；
