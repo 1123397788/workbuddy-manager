@@ -13,6 +13,18 @@
 腾讯返回的裸名（`glm-5.2`），而上游 `/v1/models` 与客户端实际调用用的是
 带前缀的 id（`cn:glm-5.2`）。两者混用会让客户端选中模型后 404，所以这里
 统一产出**带前缀**的 id，并在白名单为空时要求调用方给出完整清单。
+
+**两种 base url 口径，不能混用**（同一个面板地址，三类客户端要的值不同）：
+
+| 客户端 | 需要的值 | 原因 |
+|---|---|---|
+| cc-switch / claude | `http://host`（根，不带 `/v1`） | Anthropic SDK 自己拼 `/v1/messages` |
+| cc-switch / codex  | `http://host/v1` | Codex 在 base url 后拼 `/responses` |
+| ZCode（openai-responses） | `http://host/v1` | 同上 |
+
+给 claude 填 `…/v1` 是最容易犯的错：实际请求变成 `…/v1/v1/messages`，
+而面板上那个路径**存在但不是 POST 路由**，于是返回 **405** 而不是 404——
+报错看起来像"方法不对"，很容易把人引到错误方向去查。见 `anthropic_base_url`。
 """
 from __future__ import annotations
 
@@ -42,7 +54,12 @@ def gateway_model_id(model: str, realm: str = 'cn') -> str:
 
 
 def gateway_base_url(public_base: str) -> str:
-    """面板对外地址 → OpenAI 兼容 base url。"""
+    """面板对外地址 → OpenAI 兼容 base url（**带 `/v1`**）。
+
+    用于 codex / ZCode 这类 `openai-responses` 客户端：它们把 `/responses`
+    拼在 base url 后面，所以这里要含 `/v1`（`…/v1` + `/responses` = 面板的
+    `/v1/responses`）。
+    """
     base = str(public_base or '').strip().rstrip('/')
     if not base:
         raise ValueError('面板对外地址不能为空')
@@ -50,16 +67,52 @@ def gateway_base_url(public_base: str) -> str:
     return base if base.endswith('/v1') else base + '/v1'
 
 
+def anthropic_base_url(openai_base_url: str) -> str:
+    """OpenAI 兼容 base url → **Anthropic** 口径的 base url（**不带 `/v1`**）。
+
+    Claude Code 走 Anthropic SDK，sdk 自己会在 base url 后面拼 `/v1/messages`，
+    所以 `ANTHROPIC_BASE_URL` 必须是**根地址**：填成 `http://host/v1` 的话
+    实际请求会变成 `http://host/v1/v1/messages`，面板上根本没有这个路由
+    （实测 405，不是 404——更容易被误判成"方法不对"而查错方向）。
+
+    已有的真实 cc-switch 配置也是这个口径（`https://www.chedankj.com/`），
+    即**根地址 + 尾斜杠**；尾斜杠保留是因为 SDK 直接做字符串拼接，
+    不补斜杠会得到 `http://hostv1/messages`。
+    """
+    base = str(openai_base_url or '').strip().rstrip('/')
+    if not base:
+        raise ValueError('面板对外地址不能为空')
+    if base.endswith('/v1'):
+        base = base[:-len('/v1')].rstrip('/')
+    return base + '/'
+
+
 def _pick_models(models: list[str] | None, realm: str, fallback: str | None) -> list[str]:
-    """规范化模型清单；空清单时至少给一个默认模型（否则配置不可用）。"""
+    """规范化模型清单；空清单时至少给一个默认模型（否则配置不可用）。
+
+    这里是**最后一道**兜底：正常路径上，调用方（`routers/keys.py` 的
+    `_export_models`）已经保证了清单非空，并在取不到时说清该去做什么。
+    真落到这句错误，说明调用方既没拿到清单、也没给默认模型——文案仍要可照做，
+    不要只丢一句"清单为空"让人去猜。
+    """
     out = [gateway_model_id(m, realm) for m in (models or []) if str(m or '').strip()]
     if not out:
         if not fallback:
-            raise ValueError('模型清单为空且未指定默认模型')
+            raise ValueError('没有可用的模型：请为该密钥填写模型白名单后重试')
         out = [gateway_model_id(fallback, realm)]
     # 去重但保留顺序（上游清单本身有先后含义，客户端按 modelOrder 展示）
     seen: set[str] = set()
     return [m for m in out if not (m in seen or seen.add(m))]
+
+
+def first_model(models: list[str] | None, realm: str,
+                default_model: str | None = None) -> str:
+    """这份配置实际会用的主模型（网关口径）。
+
+    抽出来是因为「一键导入」走深链时要把同一个模型名塞进 URL 参数，而真正
+    决定它的是 `_pick_models`——两处各推一遍迟早会漂移，所以只留一个出口。
+    """
+    return _pick_models(models, realm, default_model)[0]
 
 
 def to_ccswitch(*, token: str, base_url: str, app: str, name: str,
@@ -87,7 +140,8 @@ def to_ccswitch(*, token: str, base_url: str, app: str, name: str,
     if app == 'claude':
         return {'env': {
             'ANTHROPIC_AUTH_TOKEN': token,
-            'ANTHROPIC_BASE_URL': base_url + '/',
+            # 根地址而非 /v1：SDK 自己拼 /v1/messages（见 anthropic_base_url）
+            'ANTHROPIC_BASE_URL': anthropic_base_url(base_url),
             'ANTHROPIC_MODEL': chosen,
             # 三个档位都指向同一模型：面板按模型名路由，没有 haiku/sonnet/opus
             # 的概念；留空会让 cc-switch 回退到官方模型名而打到错误的端点。
