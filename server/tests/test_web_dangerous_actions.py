@@ -59,6 +59,31 @@ def _inside_confirm_dialog(src: str, pos: int) -> bool:
     return opened > closed
 
 
+def _enclosing_function(src: str, pos: int) -> str:
+    """`pos` 所在函数的函数名（找不到返回空串）。只认 `function name(` 这种写法。"""
+    last = None
+    for m in re.finditer(r'(?:async\s+)?function\s+(\w+)\s*\(', src[:pos]):
+        last = m
+    return last.group(1) if last else ''
+
+
+def _wired_into_confirm(src: str, pos: int) -> bool:
+    """调用点在具名函数里、而该函数被某个 `ConfirmDialog` 的 `onConfirm` 引用。
+
+    等价于「在确认弹窗内」，只是形态不同：`#89` 的「删除上游」把调用写成
+    `async function remove(item)`，再由 `<ConfirmDialog onConfirm={() => remove(item)}>`
+    触发。合并 `#87` 的扫描器时这条被判成「没有二次确认」——是**误报**：弹窗确实在，
+    只是调用点不在 JSX 子块里。
+
+    判据刻意收窄：必须**同时**满足「有具名函数包着它」与「该函数名出现在某处
+    onConfirm 里」，所以裸 `onClick={() => remove(item)}` 不会因此过关。
+    """
+    fn = _enclosing_function(src, pos)
+    if not fn:
+        return False
+    return re.search(r'onConfirm=\{[^}]*\b' + re.escape(fn) + r'\s*\(', src) is not None
+
+
 # 破坏性调用：删掉东西、清空记录、吊销凭据。README 承诺「危险操作一律二次确认」，
 # 这份形态清单就是那句话的可执行版本。
 _DESTRUCTIVE = re.compile(
@@ -80,8 +105,9 @@ def _destructive_sites() -> list[tuple[str, int, str, bool]]:
         src = path.read_text(encoding='utf-8')
         rel = path.relative_to(_ROOT).as_posix()
         for m in _DESTRUCTIVE.finditer(src):
-            sites.append((rel, src[:m.start()].count('\n') + 1, m.group(0),
-                          _inside_confirm_dialog(src, m.start())))
+            confirmed = (_inside_confirm_dialog(src, m.start())
+                         or _wired_into_confirm(src, m.start()))
+            sites.append((rel, src[:m.start()].count('\n') + 1, m.group(0), confirmed))
     return sites
 
 
@@ -106,6 +132,21 @@ class DangerousActionTest(unittest.TestCase):
         # 反向对照：同一文件里随便挑一处与弹窗无关的代码
         other = src.index('securityApi.addRule')
         self.assertFalse(_inside_confirm_dialog(src, other), '新增规则不该被判定为在弹窗内')
+
+    def test_wired_into_confirm_discriminates(self) -> None:
+        """新判据同样要有正/反对照（理由同 `test_helper_discriminates`）。
+
+        正例：`UpstreamEndpoints.tsx` 的 `remove` —— 具名函数、被 `onConfirm` 引用；
+        反例：同文件的 `create` —— 由普通按钮触发，不该被判成「在弹窗内」。
+
+        这条判据是合并 #87 与 #89 时补的：扫描器原本只认「调用点写在 JSX 子块里」，
+        于是把上游删除那个**真有弹窗**的写法报成了漏网（回归守卫自己先红了）。
+        """
+        src = _read(_ROOT / 'web' / 'components' / 'settings' / 'UpstreamEndpoints.tsx')
+        pos = src.index('upstreamsApi.remove(')
+        self.assertTrue(_wired_into_confirm(src, pos), '删除上游应判定为「在确认弹窗内」')
+        other = src.index('upstreamsApi.create(')
+        self.assertFalse(_wired_into_confirm(src, other), '新增上游不该被判定为在弹窗内')
 
     def test_security_rule_delete_is_confirmed(self) -> None:
         """删 IP 规则必须二次确认。
