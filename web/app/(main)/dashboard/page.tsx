@@ -46,9 +46,8 @@ import {StatCard} from '@/components/common/layout/StatCard';
 import {CreditCountdown} from '@/components/common/accounts/CreditCountdown';
 import {EmptyState} from '@/components/common/layout/EmptyState';
 import {LoadError} from '@/components/common/states/LoadError';
+import {SkeletonBar} from '@/components/common/states/SkeletonBar';
 import {Badge} from '@/components/ui/badge';
-import {Skeleton} from '@/components/ui/skeleton';
-import {cn} from '@/lib/utils';
 import {useT} from '@/lib/i18n/provider';
 
 /**
@@ -308,7 +307,7 @@ export default function DashboardPage() {
           仍然是对的，只是可能不是最新的。原先这里只弹一个 toast，几秒后自己
           消失，用户切回来看到的是一片「正常」的数字。 */}
       {partialFailed && (
-        <LoadError message={t('dashboard.partialLoadFailed')} onRetry={reload} />
+        <LoadError message={t('state.partialFailed')} onRetry={reload} />
       )}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5 md:gap-4">
@@ -605,29 +604,16 @@ export default function DashboardPage() {
   );
 }
 
-/**
- * 骨架里的一根「条」。
- *
- * 为什么要显式指定底色：`Skeleton` 自带 `bg-accent`，而本页所有卡片用的是
- * `bg-muted` —— 这两个颜色在 globals.css 里**明暗两套主题下都是同一个字面量**
- * （浅色同为 oklch(0.967 0.001 286.375)，深色同为 oklch(0.274 0.006 286.033)），
- * 直接放上去等于画了看不见的条。改用前景色的低透明度：浅色下压暗、深色下提亮，
- * 两种主题都能看出形状。
- */
-function Bar({className}: {className?: string}) {
-  return <Skeleton className={cn('bg-foreground/10', className)} />;
-}
-
 /** 统计卡片的骨架。外壳与 StatCard 逐项对齐（同高、同圆角、同底色），到位时不跳 */
 function StatCardSkeleton() {
   return (
     <div className="min-h-[88px] rounded-[20px] bg-muted px-3.5 py-3 sm:min-h-[96px] sm:px-4">
       <div className="flex items-start justify-between gap-2">
-        <Bar className="h-2.5 w-16" />
-        <Bar className="h-6 w-6 rounded-full" />
+        <SkeletonBar className="h-2.5 w-16" />
+        <SkeletonBar className="h-6 w-6 rounded-full" />
       </div>
-      <Bar className="mt-3 h-6 w-20" />
-      <Bar className="mt-2 h-2.5 w-24" />
+      <SkeletonBar className="mt-3 h-6 w-20" />
+      <SkeletonBar className="mt-2 h-2.5 w-24" />
     </div>
   );
 }
@@ -650,18 +636,18 @@ function DashboardSkeleton() {
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="rounded-[20px] bg-muted p-4 lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <Bar className="h-3.5 w-28" />
-            <Bar className="h-3 w-20" />
+            <SkeletonBar className="h-3.5 w-28" />
+            <SkeletonBar className="h-3 w-20" />
           </div>
-          <Bar className="h-[220px] w-full rounded-2xl" />
+          <SkeletonBar className="h-[220px] w-full rounded-2xl" />
         </div>
         <div className="rounded-[20px] bg-muted p-4">
-          <Bar className="mb-3 h-3.5 w-20" />
+          <SkeletonBar className="mb-3 h-3.5 w-20" />
           <div className="space-y-3">
             {Array.from({length: 6}, (_, i) => (
               <div key={i} className="flex items-center justify-between">
-                <Bar className="h-2.5 w-16" />
-                <Bar className="h-2.5 w-8" />
+                <SkeletonBar className="h-2.5 w-16" />
+                <SkeletonBar className="h-2.5 w-8" />
               </div>
             ))}
           </div>
@@ -669,18 +655,18 @@ function DashboardSkeleton() {
       </section>
 
       <section className="rounded-[20px] bg-muted p-4">
-        <Bar className="mb-3 h-3.5 w-24" />
+        <SkeletonBar className="mb-3 h-3.5 w-24" />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({length: 6}, (_, i) => (
             <div key={i} className="rounded-2xl bg-background/60 p-3">
               <div className="flex items-center justify-between gap-2">
-                <Bar className="h-3.5 w-20" />
-                <Bar className="h-2.5 w-10" />
+                <SkeletonBar className="h-3.5 w-20" />
+                <SkeletonBar className="h-2.5 w-10" />
               </div>
-              <Bar className="mt-2 h-1.5 w-full rounded-full" />
+              <SkeletonBar className="mt-2 h-1.5 w-full rounded-full" />
               <div className="mt-1.5 flex items-center justify-between gap-2">
-                <Bar className="h-2.5 w-12" />
-                <Bar className="h-2.5 w-10" />
+                <SkeletonBar className="h-2.5 w-12" />
+                <SkeletonBar className="h-2.5 w-10" />
               </div>
             </div>
           ))}

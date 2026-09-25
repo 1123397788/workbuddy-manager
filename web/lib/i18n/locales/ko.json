@@ -27,6 +27,7 @@
   "state": {
     "loadFailed": "데이터를 불러오지 못했습니다",
     "loadFailedHint": "네트워크 연결이나 백엔드 서비스가 정상인지 확인한 후 다시 시도하세요.",
+    "partialFailed": "일부 데이터를 불러오지 못했습니다",
     "retry": "다시 시도"
   },
   "nav": {
@@ -183,7 +184,6 @@
     "healthSnapshot": "계정 상태 스냅샷",
     "noAccounts": "계정이 없습니다",
     "noAccountsHint": "하단 바의 '빠른 추가'로 Tencent 계정을 QR 인증하세요",
-    "partialLoadFailed": "일부 데이터를 불러오지 못했습니다",
     "unusable": "{n}개 사용 불가",
     "degraded": "연속 실패 제외",
     "creditsExpiry": "가장 가까운 만료: {amount} 크레딧 ({time})",

@@ -1,15 +1,18 @@
 'use client';
 
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useRef, useState} from 'react';
 import {ScrollText, Search, Trash2, ChevronLeft, ChevronRight} from 'lucide-react';
 import {useHeartbeat} from '@/lib/use-heartbeat';
 import {notify} from '@/lib/toast';
-import {keyApi, logApi, errText} from '@/lib/api';
+import {keyApi, logApi} from '@/lib/api';
+import {useAsyncAll} from '@/lib/use-async-data';
 import type {ApiKey, RequestLog} from '@/lib/types';
 import {fmtCredit, fmtDateTime, fmtDateTimeMarked, fmtLatency, fmtNumber} from '@/lib/format';
 import {PageHeader} from '@/components/common/layout/PageHeader';
 import {EmptyState} from '@/components/common/layout/EmptyState';
 import {ConfirmDialog} from '@/components/common/layout/ConfirmDialog';
+import {LoadError} from '@/components/common/states/LoadError';
+import {SkeletonBar} from '@/components/common/states/SkeletonBar';
 import {useAuth} from '@/lib/auth-context';
 import {useRealm} from '@/lib/realm-context';
 import {Button} from '@/components/ui/button';
@@ -42,6 +45,15 @@ import {
 } from '@/components/ui/table';
 
 const PAGE_SIZE = 20;
+
+/**
+ * 空数组的稳定引用。
+ *
+ * 必须是模块级常量，不能每次渲染现写一个 `[]`：它们是「还没取到」时的兜底值，
+ * 每帧新建的数组会让下游任何依赖它的 `useMemo` / `useEffect` 每帧重算。
+ */
+const EMPTY_LOGS: RequestLog[] = [];
+const EMPTY_KEYS: ApiKey[] = [];
 
 /**
  * 本次请求的缓存命中率（issue #69）。
@@ -85,12 +97,8 @@ export default function LogsPage() {
   const t = useT();
   const {isAdmin} = useAuth();
   // 日志随顶部版本切换：两个版本走不同账号池，混看会把两个池子的调用搅在一起
-  const {realm, label: realmName} = useRealm();
-  const [logs, setLogs] = useState<RequestLog[]>([]);
-  const [total, setTotal] = useState(0);
+  const {realm} = useRealm();
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [keys, setKeys] = useState<ApiKey[]>([]);
   const [detail, setDetail] = useState<RequestLog | null>(null);
 
   const [keyId, setKeyId] = useState('all');
@@ -109,7 +117,7 @@ export default function LogsPage() {
    * 写法说明：用「渲染期纠正 state」而不是 `useEffect` + `setPage`。
    * 后者会先用旧页码发一次请求、再重置页码发第二次（白白多查一次，且第一份
    * 结果可能短暂显示出来）。在渲染期直接 setState，React 会在本次渲染结束前
-   * 立刻用新 state 重渲染，下面的加载 effect 只跑一次、拿到的就是第 1 页。
+   * 立刻用新 state 重渲染，下面的取数只跑一次、拿到的就是第 1 页。
    */
   const lastRealm = useRef(realm);
   if (lastRealm.current !== realm) {
@@ -117,82 +125,140 @@ export default function LogsPage() {
     if (page !== 1) setPage(1);
   }
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await logApi.list({
-        page,
-        size: PAGE_SIZE,
-        key_id: keyId === 'all' ? undefined : keyId,
-        model: model || undefined,
-        status: status === 'all' ? undefined : status,
-        ip: ip || undefined,
-        days: Number(days) || undefined,
-        realm,
-      });
-      setLogs(res.items);
-      setTotal(res.total);
-    } catch (e) {
-      notify.err(errText(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, keyId, model, status, ip, days, realm]);
+  /**
+   * 日志列表。依赖分两组，因为**翻页和切版本的要求正好相反**
+   * （判据与理由都在 lib/async-state.ts 的 `depMode` 里）：
+   *
+   *  · `realm` 变了 = 换了一个数据上下文 → **清空重取**。旧版本的日志留在屏幕上、
+   *    而标题已经写着另一个版本，比空着更误导。切版本也必须**立即**重取，
+   *    不能只等 60 秒心跳——用户点一下没反应会以为功能坏了（实测反馈）。
+   *  · `page` / `days` 变了 = 只是换了个查询范围 → **保留现有内容静默重取**。
+   *    翻页是高频操作，若也清空，每翻一页都会闪一次骨架，看起来像页面在抽搐。
+   *
+   * 其余筛选项（密钥 / 模型 / 状态 / IP）**有意不在依赖里**：它们由「查询」按钮
+   * 显式触发，不该边打字边重查。是否改成自动重取是另一个待定议题，本次不动。
+   */
+  const {
+    values,
+    errors: logErrors,
+    isInitialLoading,
+    isInitialFailed,
+    isRefreshing,
+    reload: reloadLogs,
+  } = useAsyncAll(
+    {
+      logs: () =>
+        logApi.list({
+          page,
+          size: PAGE_SIZE,
+          key_id: keyId === 'all' ? undefined : keyId,
+          model: model || undefined,
+          status: status === 'all' ? undefined : status,
+          ip: ip || undefined,
+          days: Number(days) || undefined,
+          realm,
+        }),
+    },
+    [realm],
+    [page, days],
+  );
 
-  useEffect(() => {
-    load();
-    // 依赖是「会改变查询范围」的项，而不是 load 本身：其余筛选条件（密钥/模型/
-    // 状态/IP）由「查询」按钮显式触发，不该边打字边重查。
-    //
-    // **realm 必须在这里**：切版本若只等 60 秒心跳，用户点一下会觉得没反应、
-    // 以为功能坏了（实测反馈）。分页与天数本来就在，切版本理应同属「立即重查」。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, days, realm]);
+  /**
+   * 筛选下拉用的密钥列表，**单独一个 hook**。
+   *
+   * 它只喂那个下拉，既不随翻页也不随天数变化；若并进上面那组，每次翻页都会
+   * 白打一个请求。它的失败按「部分失败」处理——下拉取不到，不该把整页日志顶掉。
+   */
+  const {
+    values: keyValues,
+    errors: keyErrors,
+    reload: reloadKeys,
+  } = useAsyncAll({keys: () => keyApi.list()}, []);
+
+  const logs: RequestLog[] = values.logs?.items ?? EMPTY_LOGS;
+  const total = values.logs?.total ?? 0;
+  const keys: ApiKey[] = keyValues.keys ?? EMPTY_KEYS;
+
+  const failedCount = Object.keys(logErrors).length + Object.keys(keyErrors).length;
+
+  /** 重试：两组一起重来，避免「点了重试、密钥下拉还是空的」 */
+  const retry = useCallback(() => {
+    reloadLogs();
+    reloadKeys();
+  }, [reloadLogs, reloadKeys]);
 
   // 新请求会不断写入日志；心跳刷新只更新当前筛选下的列表，不会重置筛选条件
-  useHeartbeat(load, 60000);
-
-  useEffect(() => {
-    keyApi.list().then(setKeys).catch(() => undefined);
-  }, []);
+  useHeartbeat(reloadLogs, 60000);
 
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  function applyFilters() {
-    setPage(1);
-    load();
+  /**
+   * 回到第 1 页并重取。
+   *
+   * 页码本来就在第 1 页时 `setPage(1)` 是个空操作、依赖没变、不会触发重取，
+   * 所以得显式补一次 `reloadLogs()`——这正是原来「在第 1 页点筛选没反应」的坑。
+   * 页码真的变了就交给上面那组依赖去重取，否则会连打两次请求。
+   */
+  function refetchFromFirstPage() {
+    if (page === 1) reloadLogs();
+    else setPage(1);
+  }
+
+  const header = (
+    <PageHeader
+      title={t('logs.title')}
+      description={t('logs.description')}
+      actions={
+        <>
+          {isAdmin && (
+            <ConfirmDialog
+              title={t('logs.clearTitle')}
+              description={t('logs.clearDesc')}
+              confirmText={t('common.clear')}
+              destructive
+              onConfirm={async () => {
+                await logApi.clear();
+                notify.ok(t('logs.cleared'));
+                refetchFromFirstPage();
+              }}
+              trigger={
+                <Button variant="outline" size="sm" className="rounded-full text-red-500">
+                  <Trash2 />
+                  {t('common.clear')}
+                </Button>
+              }
+            />
+          )}
+        </>
+      }
+    />
+  );
+
+  /**
+   * 首屏还没拿到日志：先给骨架，别先渲染「第 1 页 / 共 1 页」和「暂无日志」——
+   * 那两句话在数据还在路上时都是错的。整页错误态同理：一份都没取到时，
+   * 让用户看到「数据加载失败 + 重试」，而不是一张空表和一句「暂无日志」。
+   */
+  if (isInitialFailed || isInitialLoading) {
+    return (
+      <div className="flex flex-col gap-4 md:gap-6">
+        {header}
+        {isInitialFailed ? (
+          <LoadError variant="page" onRetry={retry} />
+        ) : (
+          <LogsSkeleton />
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-4 md:gap-6">
-      <PageHeader
-        title={t('logs.title')}
-        description={t('logs.description')}
-        actions={
-          <>
-            {isAdmin && (
-              <ConfirmDialog
-                title={t('logs.clearTitle')}
-                description={t('logs.clearDesc')}
-                confirmText={t('common.clear')}
-                destructive
-                onConfirm={async () => {
-                  await logApi.clear();
-                  notify.ok(t('logs.cleared'));
-                  setPage(1);
-                  load();
-                }}
-                trigger={
-                  <Button variant="outline" size="sm" className="rounded-full text-red-500">
-                    <Trash2 />
-                    {t('common.clear')}
-                  </Button>
-                }
-              />
-            )}
-          </>
-        }
-      />
+    <div className="flex flex-col gap-4 md:gap-6" aria-busy={isRefreshing}>
+      {header}
+
+      {/* 部分失败：已经显示出来的日志仍然是对的，只是可能不是最新的。
+          用一条常驻提示说明，**不把表格顶掉**；下一次刷新成功后自动消失。 */}
+      {failedCount > 0 && <LoadError message={t('state.partialFailed')} onRetry={retry} />}
 
       <section className="rounded-[20px] bg-muted p-4">
         <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-6">
@@ -239,7 +305,7 @@ export default function LogsPage() {
             <Label className="text-[11px] text-muted-foreground">{t('logs.filterIp')}</Label>
             <Input value={ip} onChange={(e) => setIp(e.target.value)} placeholder={t('common.all')} className="bg-background" />
           </div>
-          <Button className="rounded-full" onClick={applyFilters}>
+          <Button className="rounded-full" onClick={refetchFromFirstPage}>
             <Search />
             {t('logs.filter')}
           </Button>
@@ -357,7 +423,10 @@ export default function LogsPage() {
           </TableBody>
         </Table>
 
-        {!logs.length && !loading && (
+        {/* 走到这里说明首屏已经就绪——还在取数时上面已经整块返回骨架了。
+            所以「没有日志」是真的没有，不需要再拿「请求在不在飞」去兜一层
+            （原先那个 `!loading` 判据正是这个意思，现在由骨架分支统一承担）。 */}
+        {!logs.length && (
           <EmptyState
             icon={ScrollText}
             title={t('logs.emptyTitle')}
@@ -467,5 +536,67 @@ export default function LogsPage() {
         </DrawerContent>
       </Drawer>
     </div>
+  );
+}
+
+/**
+ * 首屏骨架。
+ *
+ * 分两块对着真实版面：筛选区（一行六个控件）与表格区（表头 + 8 行 + 页码条）。
+ * 尺寸都照着真实控件给（输入框 36px、行高约 37px），数据到位时版面不跳——
+ * 骨架比真实内容矮一截的话，加载完会整页往下窜一下，比没有骨架更难受。
+ */
+function LogsSkeleton() {
+  return (
+    <>
+      <FilterSkeleton />
+      <LogsTableSkeleton />
+    </>
+  );
+}
+
+/** 筛选区骨架：五个「标签 + 控件」加一个「查询」按钮，正好填满六列网格 */
+function FilterSkeleton() {
+  return (
+    <section className="rounded-[20px] bg-muted p-4">
+      <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-6">
+        {Array.from({length: 5}, (_, i) => (
+          <div key={i} className="space-y-1.5">
+            <SkeletonBar className="h-2.5 w-12" />
+            <SkeletonBar className="h-9 w-full rounded-md" />
+          </div>
+        ))}
+        <SkeletonBar className="h-9 w-full rounded-full" />
+      </div>
+    </section>
+  );
+}
+
+/** 表格骨架：表头一行 + 8 行数据 + 底部页码条，列宽大致对着真实各列 */
+function LogsTableSkeleton() {
+  const headWidths = ['w-20', 'w-12', 'w-16', 'w-16', 'w-14', 'w-10', 'w-12', 'w-12', 'w-14', 'w-10'];
+  const cellWidths = ['w-24', 'w-14', 'w-20', 'w-20', 'w-16', 'w-10', 'w-12', 'w-12', 'w-16', 'w-12'];
+  return (
+    <section className="overflow-hidden rounded-[20px] bg-muted">
+      <div className="flex items-center gap-4 border-b border-border/60 px-4 py-2.5">
+        {headWidths.map((w, i) => (
+          <SkeletonBar key={i} className={`h-2.5 ${w}`} />
+        ))}
+      </div>
+      {Array.from({length: 8}, (_, r) => (
+        <div key={r} className="flex items-center gap-4 border-b border-border/40 px-4 py-2.5">
+          {cellWidths.map((w, i) => (
+            <SkeletonBar key={i} className={`h-3 ${w}`} />
+          ))}
+        </div>
+      ))}
+      <div className="flex items-center justify-between px-4 py-3">
+        <SkeletonBar className="h-3 w-28" />
+        <div className="flex gap-1">
+          <SkeletonBar className="h-7 w-7 rounded-md" />
+          <SkeletonBar className="h-7 w-7 rounded-md" />
+        </div>
+      </div>
+    </section>
   );
 }

@@ -27,6 +27,7 @@
   "state": {
     "loadFailed": "Failed to load data",
     "loadFailedHint": "Check your network connection or whether the backend service is running, then try again.",
+    "partialFailed": "Some data failed to load",
     "retry": "Retry"
   },
   "nav": {
@@ -207,7 +208,6 @@
     "healthSnapshot": "Account health snapshot",
     "noAccounts": "No accounts yet",
     "noAccountsHint": "Use Quick add in the bottom bar to sign in a Tencent account by QR code",
-    "partialLoadFailed": "Some data failed to load",
     "unusable": "{n} unusable",
     "degraded": "Degraded",
     "creditsExpiry": "Nearest expiry: {amount} credits on {time}",
