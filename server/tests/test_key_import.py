@@ -954,10 +954,6 @@ class ClientPathDetectionTests(TempClientDirs):
         exe.unlink()
         self.assertIsNone(keyimport.find_executable('ccswitch'))
 
-    @unittest.skipUnless(sys.platform == 'win32',
-                         '协议注册表与 .exe 扫描是 Windows 专属（keyimport._from_registry / '
-                         '_scan_respects_depth 在非 Windows 上按设计返回 None）；'
-                         'POSIX 侧的契约由 test_posix_detection_never_invents_a_path 钉住')
     def test_posix_detection_never_invents_a_path(self):
         """非 Windows 上不做猜测：要么给出**真实存在**的路径，要么明确说没有。
 
@@ -971,6 +967,10 @@ class ClientPathDetectionTests(TempClientDirs):
         self.assertTrue(got is None or got.exists(),
                         f'非 Windows 上返回了不存在的路径：{got}')
 
+    @unittest.skipUnless(sys.platform == 'win32',
+                         '协议注册表与 .exe 扫描是 Windows 专属（keyimport._from_registry / '
+                         '_scan_respects_depth 在非 Windows 上按设计返回 None）；'
+                         'POSIX 侧的契约由 test_posix_detection_never_invents_a_path 钉住')
     def test_scan_respects_depth(self):
         """两层深的安装目录要能找到（绿色版常解压在某个盘的根下）。"""
         deep = self._fake_exe(sub='a/b')
