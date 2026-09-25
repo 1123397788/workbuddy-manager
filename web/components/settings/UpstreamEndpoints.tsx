@@ -186,6 +186,7 @@ export function UpstreamEndpoints() {
         open={formOpen}
         onOpenChange={setFormOpen}
         editing={editing}
+        defaultUpstream={items.find((item) => item.is_default) ?? null}
         onSaved={() => void load()}
       />
     </section>

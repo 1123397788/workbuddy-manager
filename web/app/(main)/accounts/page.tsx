@@ -795,6 +795,21 @@ export default function AccountsPage() {
     );
   }
 
+  /**
+   * 当前分组是否与默认分组**共用同一套上游实例**（地址相同）。
+   *
+   * 这时搬进来的账号不会被任何实例加载（列表里显示「未加载」），密钥也仍然
+   * 打默认池——必须在页面上说明，否则就是「以为隔离了、其实没有」。
+   */
+  const sharedUrlGroup = (() => {
+    if (groupId == null) return null;
+    const active = groups.find((g) => g.id === groupId);
+    const dft = groups.find((g) => g.is_default);
+    if (!active || !dft || !active.base_url || !dft.base_url) return null;
+    const norm = (u: string) => u.trim().replace(/\/+$/, '');
+    return norm(active.base_url) === norm(dft.base_url) ? active : null;
+  })();
+
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <PageHeader
@@ -920,6 +935,11 @@ export default function AccountsPage() {
       {groupInfo && !groupInfo.manageable && groupId != null && (
         <p className="px-1 text-[11px] leading-4 text-muted-foreground">
           {t('accounts.groupNoDir', {name: groupInfo.name})}
+        </p>
+      )}
+      {sharedUrlGroup && (
+        <p className="px-1 text-[11px] leading-4 text-muted-foreground">
+          {t('accounts.groupSharedUrl', {name: sharedUrlGroup.name})}
         </p>
       )}
 
@@ -1074,6 +1094,7 @@ export default function AccountsPage() {
         open={groupDialogOpen}
         onOpenChange={setGroupDialogOpen}
         editing={null}
+        defaultUpstream={groups.find((g) => g.is_default) ?? null}
         onSaved={(item) => {
           if (item && item.id != null) setGroupId(item.id);
           void load();

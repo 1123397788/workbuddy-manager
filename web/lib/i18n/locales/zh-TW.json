@@ -372,7 +372,8 @@
     "movePick": "選擇分組…",
     "moveNoDirSuffix": "（未設定帳號目錄）",
     "moveConfirm": "移動",
-    "moved": "已移動到「{name}」"
+    "moved": "已移動到「{name}」",
+    "groupSharedUrl": "分組「{name}」與預設分組共用同一套上游實例：搬進來的帳號不會被實際使用（顯示「未載入」）。要獨立使用，請到「設定 → 上游」把它的位址改成另一套實例。"
   },
   "keys": {
     "title": "API 金鑰",
@@ -529,9 +530,10 @@
     "fieldContainer": "容器名稱（可選）",
     "fieldContainerPlaceholder": "workbuddy2api-g2",
     "fieldContainerHint": "填了就能從面板「重啟」該分組；留空時帳號檔案的增刪改由上游熱載入自動收錄（約 5 秒）。",
-    "formGroupHint": "一個分組 = 一套獨立的上游實例（自己的埠、auths 目錄與 api_key）。要真正隔離帳號池，請在伺服器上再部署一套 workbuddy2api，把它的位址、密鑰和帳號目錄填在這裡。",
+    "formGroupHint": "一個分組 = 一套獨立的上游實例（自己的埠、auths 目錄與 api_key）。新增時只填名稱也行：上游位址與帳號目錄會帶出建議值，按需修改。要真正隔離帳號池，請在伺服器上再部署一套 workbuddy2api，把它的位址、密鑰和帳號目錄填在這裡。",
     "dirLine": "帳號目錄：{dir}",
-    "noDirLine": "未設定帳號目錄（僅用於密鑰轉發）"
+    "noDirLine": "未設定帳號目錄（僅用於密鑰轉發）",
+    "sharedUrlHint": "位址與預設分組相同：這個分組與預設分組共用同一套實例——搬進來的帳號不會被實際使用（顯示「未載入」）。要讓它獨立使用帳號，請改成另一套 workbuddy2api 的位址，並把那套實例的 auths 目錄指向上面的「帳號目錄」。"
   },
   "logs": {
     "cacheShort": "快取 {pct}%",

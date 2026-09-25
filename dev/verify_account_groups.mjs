@@ -13,6 +13,7 @@ import {pathToFileURL} from 'node:url';
 
 const BASE = process.env.WB_BASE || 'http://127.0.0.1:8023';
 const PASS = process.env.WB_PASS || '';
+const DEFAULT_URL = process.env.WB_DEFAULT_URL || '';
 const GROUP_URL = process.env.WB_GROUP_URL || 'http://127.0.0.1:8022';
 const GROUP_KEY = process.env.WB_GROUP_KEY || '';
 const GROUP_DIR = process.env.WB_GROUP_DIR || '';
@@ -103,6 +104,13 @@ await page.getByRole('button', {name: /添加分组/}).first().click();
 await page.waitForTimeout(800);
 const dlg = page.locator('[role=dialog]').last();
 await dlg.getByPlaceholder('例如：业务组').fill('甲组');
+// 用户反馈：添加分组不想手填——只填名称时，地址与账号目录都要带出建议值
+const urlVal = await dlg.getByPlaceholder('http://127.0.0.1:7863').inputValue();
+const dirVal = await dlg.getByPlaceholder('/opt/workbuddy2api-g2/auths').inputValue();
+step(!!urlVal && urlVal === DEFAULT_URL, '上游地址自动带出默认分组的地址', urlVal);
+step(!!dirVal, '账号目录自动带出建议路径（同级 + 名称后缀）', dirVal);
+step(/共用同一套实例/.test(await bodyText()),
+     '地址与默认分组相同时给出「共用同一套实例」提示');
 await dlg.getByPlaceholder('http://127.0.0.1:7863').fill(GROUP_URL);
 await dlg.getByPlaceholder('留空 = 不带鉴权头').fill(GROUP_KEY);
 await dlg.getByPlaceholder('/opt/workbuddy2api-g2/auths').fill(GROUP_DIR);
@@ -146,11 +154,15 @@ await page.waitForTimeout(800);
 const dlg2 = page.locator('[role=dialog]').last();
 await dlg2.getByPlaceholder('例如：业务组').fill('空组');
 await dlg2.getByPlaceholder('http://127.0.0.1:7863').fill('http://127.0.0.1:8021');
+// 显式清空账号目录 = 该分组只做密钥转发（新表单默认会带出建议路径）
+await dlg2.getByPlaceholder('/opt/workbuddy2api-g2/auths').fill('');
 await dlg2.getByRole('button', {name: /保存|确定|新增/}).last().click();
 await page.waitForTimeout(2500);
 text = await bodyText();
 step(/未配置本地账号目录/.test(text), '没配账号目录的分组会说明原因（只读）',
      text.split('\n').find((l) => l.includes('未配置本地账号目录')) || '');
+step(/共用同一套/.test(text), '地址与默认分组相同的分组也有常驻说明',
+     text.split('\n').find((l) => l.includes('共用同一套')) || '');
 await page.screenshot({path: path.join(OUT, '06-no-dir-hint.png'), fullPage: true});
 
 step(pageErrors.length === 0, '没有未捕获的前端异常', pageErrors.slice(0, 2).join(' | '));

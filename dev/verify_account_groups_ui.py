@@ -151,6 +151,7 @@ def main() -> int:
             **os.environ,
             'WB_BASE': f'http://127.0.0.1:{MANAGER_PORT}',
             'WB_PASS': ADMIN_PW,
+            'WB_DEFAULT_URL': f'http://127.0.0.1:{DEFAULT_UP_PORT}',
             'WB_GROUP_URL': f'http://127.0.0.1:{GROUP_UP_PORT}',
             'WB_GROUP_KEY': GROUP_KEY,
             'WB_GROUP_DIR': str(group_auths),

@@ -396,7 +396,8 @@
     "movePick": "Pick a group…",
     "moveNoDirSuffix": " (no account directory)",
     "moveConfirm": "Move",
-    "moved": "Moved to \"{name}\""
+    "moved": "Moved to \"{name}\"",
+    "groupSharedUrl": "Group \"{name}\" shares the same upstream instance as the default group: accounts moved in will not actually be used (they show as \"Not loaded\"). To use it independently, change its address under Settings → Upstreams."
   },
   "keys": {
     "title": "API keys",
@@ -553,9 +554,10 @@
     "fieldContainer": "Container name (optional)",
     "fieldContainerPlaceholder": "workbuddy2api-g2",
     "fieldContainerHint": "Fill it in to restart this group from the panel; otherwise account file changes are picked up by the upstream's hot reload (~5s).",
-    "formGroupHint": "One group = one standalone upstream instance (its own port, auths directory and api_key). To truly isolate account pools, deploy another workbuddy2api on the server and fill in its address, key and account directory here.",
+    "formGroupHint": "One group = one standalone upstream instance (its own port, auths directory and api_key). You can add one with just a name: the upstream address and account directory come pre-filled with suggestions, change them as needed. To truly isolate account pools, deploy another workbuddy2api on the server and fill in its address, key and account directory here.",
     "dirLine": "Account dir: {dir}",
-    "noDirLine": "No account directory (key forwarding only)"
+    "noDirLine": "No account directory (key forwarding only)",
+    "sharedUrlHint": "The address equals the default group's: this group shares the same instance, so accounts moved in will not actually be used (they show as \"Not loaded\"). To give it its own accounts, point the address at another workbuddy2api instance and set that instance's auths directory to the account directory above."
   },
   "logs": {
     "cacheShort": "cache {pct}%",
