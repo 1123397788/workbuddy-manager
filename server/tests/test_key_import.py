@@ -925,6 +925,10 @@ class ClientPathDetectionTests(TempClientDirs):
         self.addCleanup(os.environ.pop, 'WB_CCSWITCH_EXE', None)
         self.assertIsNone(keyimport.find_executable('ccswitch'))
 
+    @unittest.skipUnless(sys.platform == 'win32',
+                         '协议注册表与 .exe 扫描是 Windows 专属（keyimport._from_registry / '
+                         '_scan_respects_depth 在非 Windows 上按设计返回 None）；'
+                         'POSIX 侧的契约由 test_posix_detection_never_invents_a_path 钉住')
     def test_detect_remembers_and_cache_is_reused(self):
         """点一次「自动检测」之后就该长期有效（缓存命中，来源标 cache）。"""
         exe = self._fake_exe(sub='cc-switch')
@@ -949,6 +953,23 @@ class ClientPathDetectionTests(TempClientDirs):
         self.assertEqual(keyimport.find_executable('ccswitch'), exe)
         exe.unlink()
         self.assertIsNone(keyimport.find_executable('ccswitch'))
+
+    @unittest.skipUnless(sys.platform == 'win32',
+                         '协议注册表与 .exe 扫描是 Windows 专属（keyimport._from_registry / '
+                         '_scan_respects_depth 在非 Windows 上按设计返回 None）；'
+                         'POSIX 侧的契约由 test_posix_detection_never_invents_a_path 钉住')
+    def test_posix_detection_never_invents_a_path(self):
+        """非 Windows 上不做猜测：要么给出**真实存在**的路径，要么明确说没有。
+
+        Windows 检测链里的注册表与 .exe 扫描在 POSIX 上不适用（`keyimport.py` 里
+        那两处 `sys.platform != 'win32': return None`），但「环境变量 / 常见安装位」
+        这两级是跨平台的。这条钉的是**契约**而不是某个具体结果：返回的东西必须真的
+        存在，不能凭空拼一个路径出来。
+        """
+        with mock.patch.object(sys, 'platform', 'linux'):
+            got = keyimport.find_executable('ccswitch')
+        self.assertTrue(got is None or got.exists(),
+                        f'非 Windows 上返回了不存在的路径：{got}')
 
     def test_scan_respects_depth(self):
         """两层深的安装目录要能找到（绿色版常解压在某个盘的根下）。"""
@@ -1211,20 +1232,31 @@ class ClientLifecycleTests(TempClientDirs):
         self.assertIsNotNone(self.cc_row('p', 'claude'))
 
     def test_stop_escalates_to_force_when_graceful_is_ignored(self):
-        """拒绝关闭的客户端（最小化到托盘那种）要升级为强杀，而不是干等。"""
-        seq = [True, True, False]      # 起：在跑；优雅关闭后还在；强杀后才没了
-        with mock.patch.object(keyimport, 'is_running',
-                               side_effect=lambda _c: seq.pop(0) if seq else False), \
-             mock.patch.object(keyimport, '_terminate_windows') as terminate, \
-             mock.patch.object(keyimport, '_POLL', 0), \
-             mock.patch.object(keyimport, '_STOP_GRACE', 0.0):
-            out = keyimport.stop('ccswitch')
-        self.assertEqual(out, {'stopped': True, 'forced': True})
-        # 先请它自己退，再强杀——顺序不能反
-        self.assertEqual([c.kwargs['force'] for c in terminate.call_args_list],
-                         [False, True])
-        self.assertEqual(terminate.call_args_list[0].args[0],
-                         keyimport.PROCESS_NAMES['ccswitch'])
+        """拒绝关闭的客户端（最小化到托盘那种）要升级为强杀，而不是干等。
+
+        **两端都验**：`stop()` 按平台选 `_terminate_windows` / `_terminate_posix`
+        （同一个 `terminate(names, force=…)` 契约），所以两个都 mock、再按当前平台
+        断言被选中的那个。上一版只 mock 了 Windows 那个，Linux CI 上
+        `call_args_list` 就是空的——本地 Windows 全绿掩盖了这点（CI 抓到的）。
+        """
+        for platform in ('win32', 'linux'):
+            with self.subTest(platform=platform):
+                seq = [True, True, False]  # 起：在跑；优雅关闭后还在；强杀后才没了
+                with mock.patch.object(sys, 'platform', platform), \
+                     mock.patch.object(keyimport, 'is_running',
+                                       side_effect=lambda _c: seq.pop(0) if seq else False), \
+                     mock.patch.object(keyimport, '_terminate_windows') as win, \
+                     mock.patch.object(keyimport, '_terminate_posix') as posix, \
+                     mock.patch.object(keyimport, '_POLL', 0), \
+                     mock.patch.object(keyimport, '_STOP_GRACE', 0.0):
+                    out = keyimport.stop('ccswitch')
+                self.assertEqual(out, {'stopped': True, 'forced': True})
+                terminate = win if platform == 'win32' else posix
+                # 先请它自己退，再强杀——顺序不能反
+                self.assertEqual([c.kwargs['force'] for c in terminate.call_args_list],
+                                 [False, True])
+                self.assertEqual(terminate.call_args_list[0].args[0],
+                                 keyimport.PROCESS_NAMES['ccswitch'])
 
     def test_stop_returns_early_when_not_running(self):
         with mock.patch.object(keyimport, 'is_running', return_value=False):
