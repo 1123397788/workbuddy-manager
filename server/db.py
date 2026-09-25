@@ -338,6 +338,10 @@ CREATE TABLE IF NOT EXISTS upstreams (
   api_key    TEXT    NOT NULL DEFAULT '',
   note       TEXT    NOT NULL DEFAULT '',
   enabled    INTEGER NOT NULL DEFAULT 1,
+  -- 该分组的**本地账号目录**：面板按它列账号 / 添号 / 移动账号（见迁移注释）。
+  auth_dir   TEXT    NOT NULL DEFAULT '',
+  -- 该分组上游实例的容器名（可选）：面板「重启该分组」按它 docker restart。
+  container  TEXT    NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -464,6 +468,13 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # 不设外键约束：SQLite 的外键要开 PRAGMA 且删除上游时语义是「级联删密钥」还是
     # 「拒绝删」都不合适 —— 本项目在应用层做「被引用就拒绝删」（见 upstreamsvc）。
     ('api_keys', 'upstream_id', 'INTEGER'),
+    # 分组（账号池）的**本地账号目录**：面板据此列账号 / 添号 / 移动账号。
+    # 空 = 不做账号管理（该分组只用于密钥转发）。默认分组的目录来自 WB_AUTH_DIR，
+    # 是运行时结果、不落库——与「默认上游不是数据库里的一行」同一个道理。
+    ('upstreams', 'auth_dir', "TEXT NOT NULL DEFAULT ''"),
+    # 分组上游实例的容器名（可选）：面板的「重启」用 `docker restart <name>`。
+    # 空 = 从面板重启该分组时明确报错；绝不猜一个名字去重启别的服务。
+    ('upstreams', 'container', "TEXT NOT NULL DEFAULT ''"),
     # 积分额度与已用量（issue #27）。存量密钥为 0/0 = **不限积分**，行为不变。
     #
     # 为什么要在 token 之外单独记一笔：两者**不成比例** —— 同样 1M token，

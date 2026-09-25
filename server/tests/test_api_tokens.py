@@ -292,6 +292,9 @@ class WriteEndpointScopeMatrixTest(unittest.TestCase):
         'DELETE /api/upstreams/{upstream_id}',
         'PATCH /api/upstreams/{upstream_id}',
         'POST /api/upstreams',
+        # 账号分组互转：把账号文件在分组的目录之间移动——等于改「这个号属于哪个
+        # 池」，与删账号同级（都会改变池的构成），只对会话开放。
+        'POST /api/accounts/{filename}/move',
     }
     # 写方法但只要求「已登录」——只读令牌也能调。必须逐个有理由。
     ANY_LOGGED_IN = {

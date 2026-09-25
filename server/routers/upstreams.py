@@ -22,6 +22,11 @@ class UpstreamIn(BaseModel):
     api_key: str = Field(default='', max_length=500)
     note: str = Field(default='', max_length=200)
     enabled: bool = True
+    # 分组的本地账号目录（绝对路径，见 upstreamsvc.normalize_auth_dir）。
+    # 空 = 该分组不由本面板管理账号（只用于密钥转发）。
+    auth_dir: str = Field(default='', max_length=500)
+    # 分组上游实例的容器名（可选）：面板「重启该分组」按它 docker restart。
+    container: str = Field(default='', max_length=64)
 
 
 class UpstreamPatch(BaseModel):
@@ -30,6 +35,8 @@ class UpstreamPatch(BaseModel):
     api_key: str | None = None
     note: str | None = None
     enabled: bool | None = None
+    auth_dir: str | None = None
+    container: str | None = None
 
 
 def _serialize(items: list[dict]) -> list[dict]:
@@ -72,6 +79,7 @@ def create_upstream(body: UpstreamIn, request: Request,
         created = upstreamsvc.create_upstream(
             name=body.name, base_url=body.base_url, api_key=body.api_key,
             note=body.note, enabled=body.enabled,
+            auth_dir=body.auth_dir, container=body.container,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
