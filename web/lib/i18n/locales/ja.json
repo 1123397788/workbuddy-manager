@@ -27,6 +27,7 @@
   "state": {
     "loadFailed": "データの読み込みに失敗しました",
     "loadFailedHint": "ネットワーク接続またはバックエンドサービスが正常か確認してから、再試行してください。",
+    "partialFailed": "一部のデータを読み込めませんでした",
     "retry": "再試行"
   },
   "nav": {
@@ -183,7 +184,6 @@
     "healthSnapshot": "アカウント健全性スナップショット",
     "noAccounts": "アカウントがありません",
     "noAccountsHint": "画面下部の「クイック追加」から QR コードで Tencent アカウントを認証してください",
-    "partialLoadFailed": "一部のデータを読み込めませんでした",
     "unusable": "{n} 件が使用不可",
     "degraded": "連敗降格",
     "creditsExpiry": "直近の失効: {amount} クレジット（{time}）",

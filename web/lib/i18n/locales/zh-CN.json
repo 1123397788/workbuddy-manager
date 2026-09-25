@@ -27,6 +27,7 @@
   "state": {
     "loadFailed": "数据加载失败",
     "loadFailedHint": "请检查网络连接或后端服务是否正常，然后重试。",
+    "partialFailed": "部分数据加载失败",
     "retry": "重试"
   },
   "nav": {
@@ -183,7 +184,6 @@
     "healthSnapshot": "账号健康快照",
     "noAccounts": "暂无账号",
     "noAccountsHint": "点击底栏「快速添加」扫码授权腾讯账号",
-    "partialLoadFailed": "部分数据加载失败",
     "unusable": "{n} 个不可用",
     "degraded": "连败降权",
     "creditsExpiry": "最近一笔 {amount} 积分将于 {time} 到期",

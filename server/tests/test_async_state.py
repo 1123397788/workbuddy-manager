@@ -16,8 +16,8 @@
 Node 就能跑，不需要 `web/node_modules`（hook 本体 import 了 react，直接测它
 会把「没装前端依赖」变成测试失败，而不是跳过）。
 
-除行为测试外，本文件还钉三条源码级不变式——它们要么在行为测试里表达不出来
-（顺序、文件是否存在），要么是「测试别空转」的前提。
+除行为测试外，本文件还钉若干条源码级不变式——它们要么在行为测试里表达不出来
+（顺序、依赖分组、文件是否存在），要么是「测试别空转」的前提。
 """
 from __future__ import annotations
 
@@ -34,8 +34,33 @@ _ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT = _ROOT / 'web' / 'lib' / 'async-state.test.mjs'
 _PURE = _ROOT / 'web' / 'lib' / 'async-state.ts'
 _HOOK = _ROOT / 'web' / 'lib' / 'use-async-data.ts'
-_DASHBOARD = _ROOT / 'web' / 'app' / '(main)' / 'dashboard' / 'page.tsx'
+_MAIN = _ROOT / 'web' / 'app' / '(main)'
+_LOGS = _MAIN / 'logs' / 'page.tsx'
+_STATS = _MAIN / 'stats' / 'page.tsx'
 _NODE = shutil.which('node')
+
+# 接入状态系统的页面 → 它们在「数据还没到」时会说的那些谎话。
+#
+# 判据不是「有没有用 useAsyncAll」，而是「首屏守卫排在谎话前面没有」：内容区里的
+# 空状态（「暂无日志」「暂无数据」）若在数据还没取到时渲染出来，等于告诉用户
+# 「你没有数据」——而事实是还没取到。**顺序就是这条不变式的全部。**
+_PAGES_WITH_LIES = {
+    'dashboard/page.tsx': [
+        "t('dashboard.noAccounts')",      # 「暂无账号」
+        "t('dashboard.noCallData')",      # 「暂无调用数据」
+    ],
+    'logs/page.tsx': [
+        "t('logs.emptyTitle')",           # 「暂无日志」
+        "t('logs.pageInfo'",              # 「第 1 页 / 共 1 页」——数据没到时这个页码也是假的
+    ],
+    'stats/page.tsx': [
+        "t('stats.emptyTitle')",          # 两张分解表的「暂无数据」
+        "t('stats.noUsageData')",         # 趋势图的「暂无数据」
+    ],
+    'playground/page.tsx': [
+        "t('playground.noModels')",       # 「暂无可用模型」
+    ],
+}
 
 # 只跑 .mjs，不碰 .ts —— Node 的 type stripping 从 22.6 起才有
 _MIN_MAJOR = 22
@@ -65,6 +90,42 @@ def _code(path: Path) -> str:
     src = path.read_text(encoding='utf-8')
     src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)   # 块注释
     return re.sub(r'//[^\n]*', '', src)               # 行注释
+
+
+def _hook_args(src: str, nth: int = 0) -> list[str]:
+    """取出第 nth 个 `useAsyncAll(` 调用的实参文本，按顶层逗号切成几段。
+
+    为什么不用正则：实参里嵌着对象字面量、内联箭头函数、`try/catch` 语句块，
+    正则数不清括号，会切到半个实参上去。这里做一次真正的括号配对扫描。
+
+    返回空列表表示没找到那么多个调用。
+    """
+    needle = 'useAsyncAll('
+    pos = -1
+    for _ in range(nth + 1):
+        pos = src.find(needle, pos + 1)
+        if pos < 0:
+            return []
+    i = pos + len(needle)
+    depth = 1
+    args: list[str] = []
+    cur = ''
+    while i < len(src):
+        ch = src[i]
+        if ch in '([{':
+            depth += 1
+        elif ch in ')]}':
+            depth -= 1
+            if depth == 0:
+                break
+        if ch == ',' and depth == 1:
+            args.append(cur)
+            cur = ''
+        else:
+            cur += ch
+        i += 1
+    args.append(cur)
+    return [a.strip() for a in args]
 
 
 class AsyncStateBehaviourTest(unittest.TestCase):
@@ -109,28 +170,96 @@ class AsyncStateInvariantTest(unittest.TestCase):
                       '刷新分支没有合并上一次的值：某个请求失败会把内容清空')
         self.assertIn('fresh.values', code, '没看到把本次结果并进去')
 
-    def test_dashboard_guards_before_rendering_content(self) -> None:
-        """仪表盘的首屏守卫必须出现在「暂无账号」之前。
+    def test_hook_separates_context_from_query(self) -> None:
+        """hook 必须调用 `depMode`，并且把两组依赖的指纹**一路接到它面前**。
 
-        顺序就是这条不变式的全部：内容区里的空状态（「暂无账号」「暂无调用数据」）
-        在数据还没取到时渲染出来，等于告诉用户「你没有账号」——而事实是还没取到。
-        所以守卫必须**先**返回，把内容挡在后面。
+        同 `test_hook_uses_the_tested_module` 的道理：`depMode` 的行为测试若跑的是
+        一份 hook 里没人用的实现，测试全绿而线上照旧——这种空转最难发现。
+
+        所以这里钉的不是「调用了 depMode」这一句，而是整条链：
+        `refreshDeps` → `refreshKey` → `next.query` → `depMode`。中间断任何一节，
+        查询范围变化都不会触发重取——用户点「下一页」没反应，而测试照样绿。
         """
-        code = _code(_DASHBOARD)
-        guard = code.find('isInitialFailed || isInitialLoading')
-        self.assertGreaterEqual(guard, 0, '仪表盘没有首屏守卫（骨架/错误分支）')
+        code = _code(_HOOK)
+        self.assertIn('depMode(', code,
+                      'hook 没有调用 depMode——「换上下文」与「换查询范围」的区别没有生效')
+        self.assertIn('refreshDeps', code,
+                      'hook 没有接收「只重取、不清空」的那组依赖')
+        self.assertRegex(code, r'depsKey\s*=\s*JSON\.stringify\(deps\)',
+                         'hook 没把「数据上下文」序列化成指纹')
+        self.assertRegex(code, r'refreshKey\s*=\s*JSON\.stringify\(refreshDeps\)',
+                         'hook 没把「查询范围」序列化成指纹')
+        self.assertRegex(code, r'next:\s*DepPrints\s*=\s*\{[^}]*context:\s*depsKey',
+                         '交给 depMode 的指纹里没有「数据上下文」')
+        self.assertRegex(code, r'next:\s*DepPrints\s*=\s*\{[^}]*query:\s*refreshKey',
+                         '交给 depMode 的指纹里没有「查询范围」——这样它永远看不到查询'
+                         '变化，翻页 / 改时段不会重取（点了没反应）')
 
-        for liar in ("t('dashboard.noAccounts')", "t('dashboard.noCallData')"):
-            at = code.find(liar)
-            self.assertGreaterEqual(at, 0, f'仪表盘里找不到 {liar}，断言前提不成立')
-            self.assertLess(
-                guard, at,
-                f'首屏守卫排在 {liar} 之后——数据没取到时用户会看到这句「没有数据」，'
-                '而事实是还没取到',
-            )
+    def test_logs_keeps_rows_while_paging(self) -> None:
+        """日志页必须把「页码 / 天数」放进**第三**个参数（静默重取）。
 
-        # 失败也必须有可见出口，不能只弹一个几秒后消失的 toast
-        self.assertIn('LoadError', code, '仪表盘没有把加载失败显示出来')
+        第二组依赖（deps）的语义是「换了一个数据上下文」——变了就清空重取、显示骨架。
+        页码若被放进去，**每翻一页都会闪一次骨架**；而翻页是高频操作，看起来像
+        页面在抽搐。所以 page / days 必须走第三组 refreshDeps，realm 走第二组。
+        """
+        code = _code(_LOGS)
+        self.assertRegex(
+            code, r'\[realm\],\s*\n\s*\[page, days\],',
+            'logs 页的依赖分组不对：page/days 应作为第三个参数（变了只重取、不清空），'
+            'realm 作为第二个参数（变了清空重取）。放错会让每次翻页都闪一次骨架。',
+        )
+
+    def test_stats_keeps_upstream_out_of_the_main_group(self) -> None:
+        """用量统计页的上游那份数据必须**单独一个 hook**，不能和本页四份混在一起。
+
+        上游统计的取数函数把失败吞成 `{available: false}` 而不是抛错——因为它取不到
+        是常态（上游没起来、镜像太旧），不该为它弹提示。代价是它**永远算一次成功的
+        取数**：混在一起的话，五份数据全挂时它照样有值，「一份都没取到」的判据就被
+        顶掉了——页面不进整页错误态，反而照常渲染四张 0 卡片和「暂无数据」，正是
+        这一批要修的那句谎话。
+
+        这条不是从代码读出来的：真实浏览器验收时把五个接口全打成 500，整页错误态
+        根本没出现，页面显示的是「部分数据加载失败 + 四张 0 + 暂无数据」。
+        """
+        code = _code(_STATS)
+        self.assertIn('available: false', code,
+                      '上游取数不再把失败吞成 {available: false}——本断言的前提变了，'
+                      '请重新确认它是否还需要单独一个 hook')
+        args = _hook_args(code, 0)
+        self.assertGreaterEqual(len(args), 2, '找不到 stats 页第一个 useAsyncAll 调用')
+        self.assertNotIn('upstream', args[0],
+                         '上游统计被放回了本页四份数据那一组：它把失败吞成 '
+                         '{available: false}，五份全挂时会被当成「有数据」，整页错误态'
+                         '就不再出现')
+        second = _hook_args(code, 1)
+        self.assertTrue(second and 'upstream' in second[0],
+                        'stats 页没有第二个 useAsyncAll 把上游统计单独接起来')
+
+    def test_pages_guard_before_rendering_empty_states(self) -> None:
+        """每个接入状态系统的页面，首屏守卫都必须排在「没有数据」那些话之前。
+
+        这一条原本只盯 dashboard，现在扩到本批接入的全部页面——它们犯的是同一个错：
+        内容区里的空状态（「暂无账号」「暂无日志」「暂无数据」「暂无可用模型」）在数据
+        还没取到时就渲染出来，等于告诉用户「你没有数据」，而事实是还没取到。
+        用户据此会去排查账号、排查配置，方向完全错了。
+
+        所以断言的是**顺序**：守卫（骨架 / 错误分支）必须先返回，把那些话挡在后面。
+        """
+        for rel, lies in _PAGES_WITH_LIES.items():
+            with self.subTest(page=rel):
+                code = _code(_MAIN / rel)
+                guard = code.find('isInitialFailed || isInitialLoading')
+                self.assertGreaterEqual(guard, 0, f'{rel} 没有首屏守卫（骨架/错误分支）')
+                self.assertIn('LoadError', code, f'{rel} 没有把加载失败显示出来')
+                for lie in lies:
+                    at = code.find(lie)
+                    self.assertGreaterEqual(
+                        at, 0, f'{rel} 里找不到 {lie}，断言前提不成立')
+                    self.assertLess(
+                        guard, at,
+                        f'{rel} 的首屏守卫排在 {lie} 之后——数据没取到时用户会看到这句'
+                        '「没有数据」，而事实是还没取到',
+                    )
 
     def test_no_route_level_loading_tsx(self) -> None:
         """不要创建 `app/(main)/loading.tsx`。

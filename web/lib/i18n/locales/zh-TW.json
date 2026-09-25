@@ -27,6 +27,7 @@
   "state": {
     "loadFailed": "資料載入失敗",
     "loadFailedHint": "請檢查網路連線或後端服務是否正常，然後重試。",
+    "partialFailed": "部分資料載入失敗",
     "retry": "重試"
   },
   "nav": {
@@ -183,7 +184,6 @@
     "healthSnapshot": "帳號健康快照",
     "noAccounts": "暫無帳號",
     "noAccountsHint": "點擊底欄「快速新增」掃碼授權騰訊帳號",
-    "partialLoadFailed": "部分資料載入失敗",
     "unusable": "{n} 個無法使用",
     "degraded": "連敗降權",
     "creditsExpiry": "最近一筆 {amount} 積分將於 {time} 到期",
