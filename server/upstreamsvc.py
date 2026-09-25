@@ -280,6 +280,32 @@ def resolve_for_key(key: dict | None) -> dict:
     return row
 
 
+def _same_base(a: object, b: object) -> bool:
+    """两个 Base URL 是否指同一套实例（去首尾空白与末尾斜杠后逐字比较）。"""
+    return str(a or '').strip().rstrip('/') == str(b or '').strip().rstrip('/')
+
+
+def forward_api_key(upstream: dict | None) -> str:
+    """跟这套上游说话时该用的 api_key：自己填了用自己那把；留空且与默认分组
+    同址的，沿用默认上游那把。
+
+    为什么有后一条：账号页「添加分组」的默认形态就是**只填名称** —— 地址默认
+    沿用默认分组的地址，而 api_key 留空（默认分组的钥匙明文不出接口，前端填不
+    进去）。同址 = 同一套实例，钥匙本就是同一把：不沿用的话，绑定该分组的密钥
+    调用、该分组的 /status、停用 / 启用位都会吃上游 401 —— 而且只填名称恰恰是
+    产品的默认路径。
+
+    地址不同的留空维持「不带鉴权头」：既支持不鉴权的自建实例，也不把默认钥匙
+    发去别的地址。
+    """
+    key = str((upstream or {}).get('api_key') or '')
+    if key or not upstream or upstream.get('is_default'):
+        return key
+    if _same_base(upstream.get('base_url'), default_upstream().get('base_url')):
+        return str(default_upstream().get('api_key') or '')
+    return ''
+
+
 async def probe(upstream: dict) -> tuple[bool, str]:
     """探测某个上游是否可达（走它的 /healthz，与部署探活同一条判据）。"""
     base = str(upstream.get('base_url') or '')

@@ -26,6 +26,7 @@ import asyncio
 import logging
 import time
 
+from .. import upstreamsvc
 from . import wb2api
 
 logger = logging.getLogger('workbuddy.reload')
@@ -238,7 +239,7 @@ async def _group_reload_worker(upstream: dict) -> None:
     deadline = time.monotonic() + HOT_RELOAD_WAIT_SECONDS
     while pending and time.monotonic() < deadline:
         st = await wb2api.get_status(base_url=base,
-                                     api_key=upstream.get('api_key') or '')
+                                     api_key=upstreamsvc.forward_api_key(upstream))
         if st.get('connected'):
             saw_upstream = True
             seen = {str(a.get('uid') or '') for a in (st.get('accounts') or [])}

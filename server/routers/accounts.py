@@ -104,7 +104,7 @@ async def list_accounts(upstream_id: int | None = Query(None),
     # manageable 标记让界面说明「该分组未配置本地账号目录」。
     accounts = wb2api.list_auth_accounts(base_dir) if base_dir else []
     status = await wb2api.get_status(base_url=group['base_url'],
-                                     api_key=group.get('api_key') or '')
+                                     api_key=upstreamsvc.forward_api_key(group))
     wb2api.merge_pool_status(accounts, status)
     # 备注随列表一次带回（issue #67）：按 uid 取，没有备注的账号给空串而不是缺字段
     # —— 前端两处视图（手机卡片 / 桌面表格）都直接读它，缺字段会多一处判空。
@@ -142,7 +142,7 @@ async def upstream_status(upstream_id: int | None = Query(None),
                           user: dict = Depends(security.current_user)) -> dict:
     group = _group(upstream_id)
     return await wb2api.get_status(base_url=group['base_url'],
-                                   api_key=group.get('api_key') or '')
+                                   api_key=upstreamsvc.forward_api_key(group))
 
 
 def _strip_cn_prefix(m: dict) -> dict:
@@ -1391,7 +1391,7 @@ async def account_set_disabled(
         if uid:
             ok, bit_msg, bit_code = await wb2api.set_manual_disabled(
                 uid, True, reason, base_url=group['base_url'],
-                api_key=group.get('api_key') or '')
+                api_key=upstreamsvc.forward_api_key(group))
             if ok:
                 return {
                     'ok': True,
@@ -1422,7 +1422,7 @@ async def account_set_disabled(
         if uid:
             ok, bit_msg, bit_code = await wb2api.set_manual_disabled(
                 uid, False, base_url=group['base_url'],
-                api_key=group.get('api_key') or '')
+                api_key=upstreamsvc.forward_api_key(group))
             if ok:
                 return {
                     'ok': True,
