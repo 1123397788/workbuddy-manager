@@ -10,7 +10,7 @@
 `/api/keys/export` 接受明文入参而**不按 key_id 查库**——这不是偷懒，是安全设计
 的必然结果；如果哪天有人把它改成 key_id + 查库，那就等于库里有明文了。
 
-本文件钉住四件事：
+本文件钉住五件事：
 
 1. **模型 id 必须是网关口径**（带 `cn:` / `global:` 前缀），裸名会被补前缀；
    已有前缀的原样保留（`global:` 决定路由，不能按 realm 改写）。
@@ -19,6 +19,8 @@
 3. **空模型清单不能产出不可用配置**：至少要有一个默认模型，否则客户端里
    选中即报错。给不出就 400，不静默生成空清单。
 4. **导出是敏感操作**：端点必须要求管理员、必须写审计，且审计里**不记密钥**。
+5. **claude 的 base url 不带 `/v1`**（codex / ZCode 要带）：口径混用会打到
+   `/v1/v1/messages`，那里返回 405 而不是 404，排查时极具误导性。
 """
 from __future__ import annotations
 
@@ -70,6 +72,35 @@ class BaseUrlTests(unittest.TestCase):
             keyexport.gateway_base_url('   ')
 
 
+class AnthropicBaseUrlTests(unittest.TestCase):
+    """claude 的 base url 要去掉 /v1 —— 这个口径错了会 405 而不是 404。
+
+    记录一个真实事故：导出给 cc-switch claude 的值曾是 `http://panel/v1/`，
+    而 Claude Code 会在其后拼 `/v1/messages`，于是打到 `/v1/v1/messages`；
+    面板上该路径**存在但不是 POST 路由**，返回 **405 Method Not Allowed**，
+    看起来像"方法用错了"，实际是 base url 多带了一截。
+    """
+
+    def test_strips_v1_and_keeps_trailing_slash(self):
+        self.assertEqual(keyexport.anthropic_base_url('http://a.b/v1'), 'http://a.b/')
+        # 传入已带尾斜杠的形态也要能吃下
+        self.assertEqual(keyexport.anthropic_base_url('http://a.b/v1/'), 'http://a.b/')
+
+    def test_subpath_deployment_keeps_prefix(self):
+        """子路径部署（面板在 /workbuddy-manager 下）时只去 /v1，不能把前缀吃掉。"""
+        self.assertEqual(
+            keyexport.anthropic_base_url('https://x.com/workbuddy-manager/v1'),
+            'https://x.com/workbuddy-manager/')
+
+    def test_without_v1_is_idempotent(self):
+        self.assertEqual(keyexport.anthropic_base_url('http://a.b'), 'http://a.b/')
+        self.assertEqual(keyexport.anthropic_base_url('http://a.b/'), 'http://a.b/')
+
+    def test_blank_is_rejected(self):
+        with self.assertRaises(ValueError):
+            keyexport.anthropic_base_url('  ')
+
+
 class CCSwitchTests(unittest.TestCase):
 
     def test_claude_shape_matches_real_config(self):
@@ -78,7 +109,9 @@ class CCSwitchTests(unittest.TestCase):
                                     name='WB', models=['glm-5.2'], realm='cn')
         env = cfg['env']
         self.assertEqual(env['ANTHROPIC_AUTH_TOKEN'], TOKEN)
-        self.assertEqual(env['ANTHROPIC_BASE_URL'], 'http://h/v1/')
+        # **根地址**（去掉 /v1）：SDK 自己拼 /v1/messages。给成 http://h/v1/ 的话
+        # 实际请求是 /v1/v1/messages，面板上没有这个 POST 路由 → 405。
+        self.assertEqual(env['ANTHROPIC_BASE_URL'], 'http://h/')
         self.assertEqual(env['ANTHROPIC_MODEL'], 'cn:glm-5.2')
         # 三个档位都要有值，否则客户端会拿官方模型名打到本端点
         for slot in ('ANTHROPIC_DEFAULT_HAIKU_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL',
