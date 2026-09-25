@@ -1,7 +1,8 @@
 /**
  * 账号分组的浏览器断言（由 verify_account_groups_ui.py 调用）。
  *
- * 走用户路径：默认分组 → 添加分组（填账号目录）→ 移动到分组 → 无目录分组的提示。
+ * 走用户路径：默认分组 → 添加分组（只填名称）→「设置 → 上游」补实例参数 →
+ * 移动到分组 → 无目录分组的提示。
  * 另外钉住两件单测看不见的事：
  *   · 分组列表读的是**它自己的目录**（甲组号不在默认分组里，反之亦然）；
  *   · 「在线」徽章来自**该分组自己的上游实例**——若问错实例，甲组号会显示
@@ -14,6 +15,7 @@ import {pathToFileURL} from 'node:url';
 const BASE = process.env.WB_BASE || 'http://127.0.0.1:8023';
 const PASS = process.env.WB_PASS || '';
 const DEFAULT_URL = process.env.WB_DEFAULT_URL || '';
+const DEFAULT_DIR = process.env.WB_DEFAULT_DIR || '';
 const GROUP_URL = process.env.WB_GROUP_URL || 'http://127.0.0.1:8022';
 const GROUP_KEY = process.env.WB_GROUP_KEY || '';
 const GROUP_DIR = process.env.WB_GROUP_DIR || '';
@@ -99,27 +101,46 @@ step(!text.includes(GROUP_KEY), '页面上不出现明文 api_key',
      text.includes(GROUP_KEY) ? '出现了明文密钥' : '未出现明文 ✓');
 await page.screenshot({path: path.join(OUT, '01-default.png'), fullPage: true});
 
-// ② 添加分组（甲组）：填账号目录 → 保存后自动切过去
+// ② 添加分组：只填名称（其余字段不出现，默认自动带出）→ 保存后自动切过去
 await page.getByRole('button', {name: /添加分组/}).first().click();
 await page.waitForTimeout(800);
 const dlg = page.locator('[role=dialog]').last();
+const visibleInputs = dlg.locator('input:visible');
+step((await visibleInputs.count()) === 1, '添加分组弹窗只有名称一个输入框（其余字段不出现）',
+     `可见输入框：${await visibleInputs.count()} 个`);
 await dlg.getByPlaceholder('例如：业务组').fill('甲组');
-// 用户反馈：添加分组不想手填——只填名称时，地址与账号目录都要带出建议值
-const urlVal = await dlg.getByPlaceholder('http://127.0.0.1:7863').inputValue();
-const dirVal = await dlg.getByPlaceholder('/opt/workbuddy2api-g2/auths').inputValue();
-step(!!urlVal && urlVal === DEFAULT_URL, '上游地址自动带出默认分组的地址', urlVal);
-step(!!dirVal, '账号目录自动带出建议路径（同级 + 名称后缀）', dirVal);
-step(/共用同一套实例/.test(await bodyText()),
-     '地址与默认分组相同时给出「共用同一套实例」提示');
-await dlg.getByPlaceholder('http://127.0.0.1:7863').fill(GROUP_URL);
-await dlg.getByPlaceholder('留空 = 不带鉴权头').fill(GROUP_KEY);
-await dlg.getByPlaceholder('/opt/workbuddy2api-g2/auths').fill(GROUP_DIR);
 await page.screenshot({path: path.join(OUT, '02-add-group-dialog.png')});
 await dlg.getByRole('button', {name: /保存|确定|新增/}).last().click();
 await page.waitForTimeout(3000);
 text = await bodyText();
-step(text.includes('甲组'), '新分组出现在切换条里');
-step(text.includes('甲组号'), '保存后自动切到甲组，并列出甲组目录的账号（读的是它自己的目录）');
+step(text.includes('甲组'), '新分组出现在切换条里（保存后自动切到甲组）');
+step(!text.includes('默认号'), '甲组列表读的是它自己的目录——现在是空的，看不见默认分组的账号');
+
+// ②b 到「设置 → 上游」把甲组指到第二套实例（顺手核对「只填名称」带出的默认值）
+await page.goto(`${BASE}/settings`, {waitUntil: 'load'});
+await page.waitForTimeout(2500);
+const upRow = page.locator('div.rounded-xl').filter({hasText: /^甲组/}).first();
+step((await upRow.count()) > 0, '设置 → 上游 里能看到刚建的甲组');
+await upRow.getByRole('button', {name: '编辑'}).click();
+await page.waitForTimeout(800);
+const edlg = page.locator('[role=dialog]').last();
+const urlVal = await edlg.getByPlaceholder('http://127.0.0.1:7863').inputValue();
+const dirVal = await edlg.getByPlaceholder('/opt/workbuddy2api-g2/auths').inputValue();
+step(!!urlVal && urlVal === DEFAULT_URL, '「只填名称」：地址默认沿用默认分组的地址', urlVal);
+step(!!DEFAULT_DIR && !!dirVal && dirVal.startsWith(DEFAULT_DIR) && dirVal.includes('甲组'),
+     '账号目录自动带出建议路径（默认目录同级 + 名称后缀）', dirVal);
+await edlg.getByPlaceholder('http://127.0.0.1:7863').fill(GROUP_URL);
+await edlg.getByPlaceholder('留空 = 同址沿用默认 api_key（其余不带鉴权头）').fill(GROUP_KEY);
+await edlg.getByPlaceholder('/opt/workbuddy2api-g2/auths').fill(GROUP_DIR);
+await edlg.getByRole('button', {name: /保存|确定|新增/}).last().click();
+await page.waitForTimeout(2500);
+
+await page.goto(`${BASE}/accounts`, {waitUntil: 'load'});
+await page.waitForTimeout(2500);
+await page.getByRole('button', {name: '甲组', exact: true}).first().click();
+await page.waitForTimeout(2500);
+text = await bodyText();
+step(text.includes('甲组号'), '甲组换指第二套实例后，列出它自己目录的账号');
 step(!text.includes('默认号'), '甲组列表里看不到默认分组的账号');
 step(/在线/.test(text), '甲组号显示「在线」——状态来自该分组自己的上游实例',
      text.split('\n').find((l) => l.includes('甲组号')) || '');
@@ -148,21 +169,25 @@ step(text.includes('默认号') && text.includes('甲组号'),
      '甲组里现在同时有它和原有的甲组号（移入成功）');
 await page.screenshot({path: path.join(OUT, '05-moved.png'), fullPage: true});
 
-// ④ 没配账号目录的分组：只读 + 说明原因
-await page.getByRole('button', {name: /添加分组/}).first().click();
+// ④ 没配账号目录的分组（在设置里显式清空目录）：只读 + 说明原因
+await page.goto(`${BASE}/settings`, {waitUntil: 'load'});
+await page.waitForTimeout(2000);
+await page.getByRole('button', {name: /新增上游/}).first().click();
 await page.waitForTimeout(800);
 const dlg2 = page.locator('[role=dialog]').last();
 await dlg2.getByPlaceholder('例如：业务组').fill('空组');
-await dlg2.getByPlaceholder('http://127.0.0.1:7863').fill('http://127.0.0.1:8021');
-// 显式清空账号目录 = 该分组只做密钥转发（新表单默认会带出建议路径）
+await dlg2.getByPlaceholder('http://127.0.0.1:7863').fill(DEFAULT_URL);
+// 显式清空账号目录 = 该分组只做密钥转发（添加 / 移动 / 删除会明确报错）
 await dlg2.getByPlaceholder('/opt/workbuddy2api-g2/auths').fill('');
 await dlg2.getByRole('button', {name: /保存|确定|新增/}).last().click();
 await page.waitForTimeout(2500);
+await page.goto(`${BASE}/accounts`, {waitUntil: 'load'});
+await page.waitForTimeout(2500);
+await page.getByRole('button', {name: '空组', exact: true}).first().click();
+await page.waitForTimeout(1500);
 text = await bodyText();
 step(/未配置本地账号目录/.test(text), '没配账号目录的分组会说明原因（只读）',
      text.split('\n').find((l) => l.includes('未配置本地账号目录')) || '');
-step(/同一条上游地址/.test(text), '地址与默认分组相同的分组也有常驻说明',
-     text.split('\n').find((l) => l.includes('同一条上游地址')) || '');
 await page.screenshot({path: path.join(OUT, '06-no-dir-hint.png'), fullPage: true});
 
 // ⑤ 删除分组：空分组能删；还有账号的分组拒删

@@ -85,17 +85,6 @@ export function MoveAccountDialog({
     return g.id !== fromGroupId;
   });
 
-  // 选中的目标是否与默认分组共用同一套实例（地址相同）：搬过去后账号不会被
-  // 实际使用（谁都没加载那个目录），必须在下手之前说清楚。
-  const norm = (u: string) => u.trim().replace(/\/+$/, '');
-  const defaultUrl = norm(groups.find((g) => g.is_default)?.base_url || '');
-  const selected = candidates.find(
-    (g) => (g.is_default ? DEFAULT_VALUE : String(g.id)) === target,
-  );
-  const selectedSharesDefault =
-    !!selected && !selected.is_default && !!defaultUrl
-    && norm(selected.base_url) === defaultUrl;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[420px]" showCloseButton>
@@ -125,11 +114,6 @@ export function MoveAccountDialog({
                 })}
               </SelectContent>
             </Select>
-            {selectedSharesDefault && (
-              <p className="text-[10px] leading-4 text-amber-600 dark:text-amber-400">
-                {t('accounts.moveSharedWarn')}
-              </p>
-            )}
           </div>
         </DialogBody>
         <DialogFooter>

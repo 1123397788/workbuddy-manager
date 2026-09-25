@@ -8,11 +8,14 @@
  * 两份拷贝会漂移，而这里每个字段都直接影响路由行为（地址错了请求打错地方、
  * 目录错了账号管到别的组去）。
  *
- * 新增时的**建议值**（用户反馈：不想手填一堆）：
- *   · 上游地址默认带出「默认分组」的地址；
+ * **账号页的入口用 `simple` 模式：只显示名称一个字段**——地址与账号目录的默认值
+ * 静默带出（地址 = 默认分组的、目录 = 默认目录同级 + 名称后缀），要细调到
+ * 「设置 → 上游」。用户反馈：添加分组只想填个名字。
+ *
+ * 新增时的**建议值**：
+ *   · 上游地址默认带出「默认分组」的地址（同址 = 与默认分组共用实例；
+ *     api_key 留空时服务端自动沿用默认那把，见 server/upstreamsvc.forward_api_key）；
  *   · 账号目录默认带出默认分组目录的同级路径（跟随名称变化，手动改过就不再跟）。
- * 两者都只是**表单初值**，提交前始终由用户确认；地址若最终与默认分组相同，
- * 表单里会明确提示「共用同一套实例、搬进来的账号不会被实际使用」。
  *
  * 编辑时**不回填明文 api_key**（接口只回脱敏值，见 routers/upstreams.py）：
  * 留空 = 不修改。
@@ -58,11 +61,6 @@ const emptyForm: FormState = {
   container: '',
 };
 
-/** 去掉末尾斜杠，便于比较两个地址是否同一套实例 */
-function trimUrl(url: string): string {
-  return url.trim().replace(/\/+$/, '');
-}
-
 /**
  * 给分组建议一个账号目录：默认分组目录的同级、加名称后缀。
  *
@@ -83,6 +81,7 @@ export function UpstreamFormDialog({
   editing,
   onSaved,
   defaultUpstream,
+  simple = false,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -95,6 +94,11 @@ export function UpstreamFormDialog({
    * 只取两个字符串参与依赖，避免父组件每次刷新列表都把正在填的表单重置掉。
    */
   defaultUpstream?: UpstreamEndpoint | null;
+  /**
+   * true = 极简模式（账号页「添加分组」）：**只显示名称**，其余字段不出现，
+   * 用默认值提交（地址 = 默认分组、账号目录 = 建议路径）。
+   */
+  simple?: boolean;
 }) {
   const t = useT();
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -132,15 +136,19 @@ export function UpstreamFormDialog({
 
   async function submit() {
     if (busy) return;
-    if (!form.name.trim() || !form.base_url.trim()) {
+    // simple 模式下列表可能还没加载完（默认分组行未就绪）：地址兜底再校验，
+    // 免得「只填了名称」却在保存时才报「地址不能为空」。
+    const baseUrl = form.base_url.trim() || (simple ? defaultBaseUrl : '');
+    if (!form.name.trim() || !baseUrl) {
       notify.err(t('upstreams.nameUrlRequired'));
       return;
     }
+    const payload = {...form, base_url: baseUrl};
     setBusy(true);
     try {
       const saved = editing
-        ? await upstreamsApi.update(editing.id as number, form)
-        : await upstreamsApi.create(form);
+        ? await upstreamsApi.update(editing.id as number, payload)
+        : await upstreamsApi.create(payload);
       notify.ok(editing ? t('upstreams.updated') : t('upstreams.created'));
       onOpenChange(false);
       onSaved?.(saved);
@@ -152,14 +160,12 @@ export function UpstreamFormDialog({
     }
   }
 
-  const sameAsDefault = !!defaultBaseUrl && trimUrl(form.base_url) === trimUrl(defaultBaseUrl);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[440px]" showCloseButton>
         <DialogHeader>
           <DialogTitle>{editing ? t('upstreams.editTitle') : t('upstreams.addTitle')}</DialogTitle>
-          <DialogDescription>{t('upstreams.formGroupHint')}</DialogDescription>
+          {!simple && <DialogDescription>{t('upstreams.formGroupHint')}</DialogDescription>}
         </DialogHeader>
         <DialogBody className="space-y-3">
           <div className="space-y-1.5">
@@ -179,6 +185,8 @@ export function UpstreamFormDialog({
               maxLength={64}
             />
           </div>
+          {!simple && (
+            <>
           <div className="space-y-1.5">
             <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldUrl')}</Label>
             <Input
@@ -190,11 +198,6 @@ export function UpstreamFormDialog({
             <p className="text-[10px] leading-4 text-muted-foreground">
               {t('upstreams.fieldUrlHint')}
             </p>
-            {sameAsDefault && (
-              <p className="text-[10px] leading-4 text-amber-600 dark:text-amber-400">
-                {t('upstreams.sharedUrlHint')}
-              </p>
-            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldKey')}</Label>
@@ -248,6 +251,8 @@ export function UpstreamFormDialog({
             <Label className="text-[11px] text-muted-foreground">{t('upstreams.fieldEnabled')}</Label>
             <Switch checked={form.enabled} onCheckedChange={(v) => setForm({...form, enabled: v})} />
           </div>
+            </>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" className="rounded-full" onClick={() => onOpenChange(false)}>

@@ -812,21 +812,6 @@ export default function AccountsPage() {
     );
   }
 
-  /**
-   * 当前分组是否与默认分组**共用同一套上游实例**（地址相同）。
-   *
-   * 这时搬进来的账号不会被任何实例加载（列表里显示「未加载」），密钥也仍然
-   * 打默认池——必须在页面上说明，否则就是「以为隔离了、其实没有」。
-   */
-  const sharedUrlGroup = (() => {
-    if (groupId == null) return null;
-    const active = groups.find((g) => g.id === groupId);
-    const dft = groups.find((g) => g.is_default);
-    if (!active || !dft || !active.base_url || !dft.base_url) return null;
-    const norm = (u: string) => u.trim().replace(/\/+$/, '');
-    return norm(active.base_url) === norm(dft.base_url) ? active : null;
-  })();
-
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <PageHeader
@@ -911,9 +896,9 @@ export default function AccountsPage() {
       />
 
       {/* 账号分组（多账号池）：默认分组 = 升级前那套（环境变量 / 上游
-          config.json）；其余分组在「设置 → 上游」里登记——一个分组 = 一套
-          独立的上游实例（自己的端口 / auths 目录 / api_key），密钥绑定分组
-          后请求只走那一组的账号。 */}
+          config.json）；「添加分组」只填名称即可（地址默认沿用默认分组的、
+          账号目录自动带出建议路径，其余字段到「设置 → 上游」再调）。
+          密钥绑定哪个分组，请求就走那一组的接入点。 */}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant={groupId == null ? 'default' : 'outline'}
@@ -967,11 +952,6 @@ export default function AccountsPage() {
       {groupInfo && !groupInfo.manageable && groupId != null && (
         <p className="px-1 text-[11px] leading-4 text-muted-foreground">
           {t('accounts.groupNoDir', {name: groupInfo.name})}
-        </p>
-      )}
-      {sharedUrlGroup && (
-        <p className="px-1 text-[11px] leading-4 text-muted-foreground">
-          {t('accounts.groupSharedUrl', {name: sharedUrlGroup.name})}
         </p>
       )}
 
@@ -1127,6 +1107,7 @@ export default function AccountsPage() {
         onOpenChange={setGroupDialogOpen}
         editing={null}
         defaultUpstream={groups.find((g) => g.is_default) ?? null}
+        simple
         onSaved={(item) => {
           if (item && item.id != null) setGroupId(item.id);
           void load();

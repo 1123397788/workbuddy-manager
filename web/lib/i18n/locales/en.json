@@ -397,12 +397,10 @@
     "moveNoDirSuffix": " (no account directory)",
     "moveConfirm": "Move",
     "moved": "Moved to \"{name}\"",
-    "groupSharedUrl": "Group \"{name}\" points at the same upstream address as the default group (same instance, same account pool): accounts in this group's own directory are not loaded by it (they show as \"Not loaded\"). To actually use them, deploy another workbuddy2api on the server (set its auths directory to this group's account directory), then point this group's address at that instance.",
     "groupDelete": "Delete group",
     "groupDeleteTitle": "Delete group \"{name}\"",
     "groupDeleteDesc": "Only the group record in this panel is deleted — the account directory and its files stay. Deletion is refused while the group still has accounts or bound keys (the error tells you how many; clear them first).",
-    "groupDeleted": "Group deleted",
-    "moveSharedWarn": "Heads-up: the target group shares the same upstream instance as the default group — the account will not actually be used after the move (it will show as \"Not loaded\") unless you set up a dedicated instance for that group first."
+    "groupDeleted": "Group deleted"
   },
   "keys": {
     "title": "API keys",
@@ -533,7 +531,7 @@
     "fieldUrl": "Upstream base URL",
     "fieldUrlHint": "Like http://127.0.0.1:7863 - no path, no trailing slash",
     "fieldKey": "Upstream api_key",
-    "fieldKeyPlaceholder": "Empty = send no auth header",
+    "fieldKeyPlaceholder": "Empty = same address as default reuses the default api_key; otherwise no auth header",
     "fieldKeyKeep": "leave blank to keep the current key ({masked})",
     "fieldNote": "Note",
     "fieldEnabled": "Enabled",
@@ -559,10 +557,9 @@
     "fieldContainer": "Container name (optional)",
     "fieldContainerPlaceholder": "workbuddy2api-g2",
     "fieldContainerHint": "Fill it in to restart this group from the panel; otherwise account file changes are picked up by the upstream's hot reload (~5s).",
-    "formGroupHint": "One group = one standalone upstream instance (its own port, auths directory and api_key). You can add one with just a name: the upstream address and account directory come pre-filled with suggestions, change them as needed. To truly isolate account pools, deploy another workbuddy2api on the server and fill in its address, key and account directory here.",
+    "formGroupHint": "One group = one upstream endpoint (its own address / api_key / account directory). A name is enough to create one: the other fields come pre-filled with defaults, change them as needed.",
     "dirLine": "Account dir: {dir}",
-    "noDirLine": "No account directory (key forwarding only)",
-    "sharedUrlHint": "The address equals the default group's: this group shares the same instance, so accounts moved in will not actually be used (they show as \"Not loaded\"). To give it its own accounts, point the address at another workbuddy2api instance and set that instance's auths directory to the account directory above."
+    "noDirLine": "No account directory (key forwarding only)"
   },
   "logs": {
     "cacheShort": "cache {pct}%",

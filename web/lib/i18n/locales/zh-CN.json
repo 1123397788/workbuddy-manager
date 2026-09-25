@@ -373,12 +373,10 @@
     "moveNoDirSuffix": "（未配置账号目录）",
     "moveConfirm": "移动",
     "moved": "已移动到「{name}」",
-    "groupSharedUrl": "分组「{name}」和默认分组指着同一条上游地址（同一套实例、同一个账号池）：这个分组自己目录里的账号不会被它加载（显示「未加载」）。要把它们真正用起来，需要在服务器上再部署一套 workbuddy2api（把它的 auths 目录指向这个分组的账号目录），然后把这个分组的地址改成那套实例的。",
     "groupDelete": "删除分组",
     "groupDeleteTitle": "删除分组「{name}」",
     "groupDeleteDesc": "只删除面板里的分组记录——账号目录与文件不会被删除。分组里还有账号、或有密钥绑着它时会拒绝删除（提示里会给出数量，先处理再删）。",
-    "groupDeleted": "已删除分组",
-    "moveSharedWarn": "注意：目标分组与默认分组共用同一套上游实例——移过去后这个账号不会被实际使用（显示「未加载」），除非你先给它配一套独立实例。"
+    "groupDeleted": "已删除分组"
   },
   "keys": {
     "title": "API 密钥",
@@ -509,7 +507,7 @@
     "fieldUrl": "上游地址（Base URL）",
     "fieldUrlHint": "形如 http://127.0.0.1:7863，不要带路径或结尾斜杠",
     "fieldKey": "上游 api_key",
-    "fieldKeyPlaceholder": "留空 = 不带鉴权头",
+    "fieldKeyPlaceholder": "留空 = 同址沿用默认 api_key（其余不带鉴权头）",
     "fieldKeyKeep": "留空 = 不修改（当前 {masked}）",
     "fieldNote": "备注",
     "fieldEnabled": "启用",
@@ -535,10 +533,9 @@
     "fieldContainer": "容器名（可选）",
     "fieldContainerPlaceholder": "workbuddy2api-g2",
     "fieldContainerHint": "填了就能从面板「重启」该分组；留空时账号文件的增删改由上游热加载自动收录（约 5 秒）。",
-    "formGroupHint": "一个分组 = 一套独立的上游实例（自己的端口、auths 目录与 api_key）。新增时只填名称也行：上游地址与账号目录会带出建议值，按需改。要真正隔离账号池，请在服务器上再部署一套 workbuddy2api，把它的地址、密钥和账号目录填在这里。",
+    "formGroupHint": "一个分组 = 一套上游接入点（自己的地址 / api_key / 账号目录）。只填名称也能建：其余字段会带出默认值，按需修改。",
     "dirLine": "账号目录：{dir}",
-    "noDirLine": "未配置账号目录（仅用于密钥转发）",
-    "sharedUrlHint": "地址与默认分组相同：这个分组与默认分组共用同一套实例——搬进来的账号不会被实际使用（显示「未加载」）。要让它独立使用账号，请改成另一套 workbuddy2api 的地址，并把那套实例的 auths 目录指向上面的「账号目录」。"
+    "noDirLine": "未配置账号目录（仅用于密钥转发）"
   },
   "logs": {
     "cacheShort": "缓存 {pct}%",

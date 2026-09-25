@@ -7,8 +7,8 @@
      显示「未加载」，而这在界面上和真的没加载长得一模一样；
   3. 「移动到分组」把账号文件真的搬到了目标目录（源列表里消失、目标列表里出现）。
 
-脚本走一遍用户路径：默认分组 → 添加分组（填账号目录）→ 移动到分组 →
-没配目录的分组的提示。截图落在 dev/.shots-account-groups/（随 PR 一并提交）。
+脚本走一遍用户路径：默认分组 → 添加分组（只填名称）→「设置 → 上游」补实例参数 →
+移动到分组 → 没配目录的分组的提示。截图落在 dev/.shots-account-groups/（随 PR 一并提交）。
 
     python dev/verify_account_groups_ui.py
 """
@@ -152,6 +152,7 @@ def main() -> int:
             'WB_BASE': f'http://127.0.0.1:{MANAGER_PORT}',
             'WB_PASS': ADMIN_PW,
             'WB_DEFAULT_URL': f'http://127.0.0.1:{DEFAULT_UP_PORT}',
+            'WB_DEFAULT_DIR': str(default_auths),
             'WB_GROUP_URL': f'http://127.0.0.1:{GROUP_UP_PORT}',
             'WB_GROUP_KEY': GROUP_KEY,
             'WB_GROUP_DIR': str(group_auths),
