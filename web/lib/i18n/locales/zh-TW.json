@@ -487,6 +487,7 @@
     "fieldUrlHint": "形如 http://127.0.0.1:7863，不要帶路徑或結尾斜線",
     "fieldKey": "上游 api_key",
     "fieldKeyPlaceholder": "留空 = 不帶鑑權標頭",
+    "fieldKeyKeep": "留空 = 不修改（目前 {masked}）",
     "fieldNote": "備註",
     "fieldEnabled": "啟用",
     "defaultTag": "預設",

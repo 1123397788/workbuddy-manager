@@ -511,6 +511,7 @@
     "fieldUrlHint": "Like http://127.0.0.1:7863 - no path, no trailing slash",
     "fieldKey": "Upstream api_key",
     "fieldKeyPlaceholder": "Empty = send no auth header",
+    "fieldKeyKeep": "leave blank to keep the current key ({masked})",
     "fieldNote": "Note",
     "fieldEnabled": "Enabled",
     "defaultTag": "default",

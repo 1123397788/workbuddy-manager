@@ -314,3 +314,92 @@ class UpstreamRoutingTest(_TempDbMixin, unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class ApiKeyNeverReturnedTest(unittest.TestCase):
+    """上游凭据绝不明文回前端（评审补）。
+
+    这一组接口的**列表只要登录**（含只读账号），而 api_key 与上游 config.json 里的
+    同等敏感——明文回传等于把它发给每一个登录用户。评审时实测过：没有这层脱敏时
+    create 与 list 的响应里都是明文。
+
+    判据用**哨兵值**扫所有响应体，而不是只看某个字段名：字段改名、多一层嵌套、
+    将来新增接口（比如详情）都不该让明文漏出去。
+    """
+
+    SECRET = 'SENTINEL-UPSTREAM-KEY-8f3a'
+
+    def setUp(self) -> None:
+        import json as _json
+        import tempfile
+        from pathlib import Path as _P
+        from fastapi.testclient import TestClient
+        from server import config, db, security
+        self._tmp = tempfile.TemporaryDirectory()
+        d = _P(self._tmp.name)
+        self._orig = (config.DB_PATH, config.USERS_FILE, config.STATIC_DIR)
+        config.DB_PATH = d / 'u.db'
+        config.USERS_FILE = d / 'users.json'
+        config.STATIC_DIR = d / 'no-static'
+        config.USERS_FILE.write_text(_json.dumps({
+            'secret': 'S' * 64,
+            'users': [{'username': 'admin', 'role': 'admin',
+                       'pwd_hash': security.make_hash('pw')},
+                      {'username': 'viewer', 'role': 'viewer',
+                       'pwd_hash': security.make_hash('pw')}],
+            'api_keys': [],
+        }), encoding='utf-8')
+        db._conn = None
+        db.connect()
+        from server.main import app
+        self.c = TestClient(app)
+
+    def tearDown(self) -> None:
+        from server import config, db
+        if db._conn is not None:
+            db._conn.close()
+        db._conn = None
+        config.DB_PATH, config.USERS_FILE, config.STATIC_DIR = self._orig
+        try:
+            self._tmp.cleanup()
+        except PermissionError:
+            pass
+
+    def _login(self, who: str) -> None:
+        r = self.c.post('/api/login', json={'username': who, 'password': 'pw'})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.c.cookies.update(dict(r.cookies))
+
+    def test_no_endpoint_returns_the_plaintext_key(self) -> None:
+        import json as _json
+        self._login('admin')
+        created = self.c.post('/api/upstreams', json={
+            'name': 'A', 'base_url': 'http://a.example', 'api_key': self.SECRET})
+        self.assertEqual(created.status_code, 200, created.text)
+        uid = created.json()['id']
+        responses = {
+            'create': created.json(),
+            'list': self.c.get('/api/upstreams').json(),
+            'patch': self.c.patch(f'/api/upstreams/{uid}', json={'note': 'x'}).json(),
+            'probe': self.c.post(f'/api/upstreams/{uid}/probe').json(),
+        }
+        for where, body in responses.items():
+            with self.subTest(where=where):
+                self.assertNotIn(self.SECRET, _json.dumps(body, ensure_ascii=False),
+                                 f'{where} 的响应里出现了明文 api_key')
+        # 前端仍要能显示「已配置」与脱敏值
+        self.assertTrue(responses['create']['has_key'])
+        self.assertTrue(responses['create']['api_key_masked'])
+        self.assertNotIn(self.SECRET, responses['create']['api_key_masked'])
+
+    def test_viewer_cannot_read_the_key_either(self) -> None:
+        """只读账号能看列表（与密钥列表同口径），但同样看不到明文。"""
+        import json as _json
+        self._login('admin')
+        self.c.post('/api/upstreams', json={'name': 'A', 'base_url': 'http://a.example',
+                                            'api_key': self.SECRET})
+        self.c.cookies.clear()
+        self._login('viewer')
+        r = self.c.get('/api/upstreams')
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertNotIn(self.SECRET, _json.dumps(r.json(), ensure_ascii=False))
+

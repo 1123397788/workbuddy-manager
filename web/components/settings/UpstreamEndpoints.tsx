@@ -82,7 +82,8 @@ export function UpstreamEndpoints() {
     setForm({
       name: item.name,
       base_url: item.base_url,
-      api_key: item.api_key || '',
+      // 不回填明文（接口只回脱敏值）：留空 = 不修改，见 submit 的注释
+      api_key: '',
       note: item.note || '',
       enabled: item.enabled,
     });
@@ -254,7 +255,11 @@ export function UpstreamEndpoints() {
               <Input
                 value={form.api_key}
                 onChange={(e) => setForm({...form, api_key: e.target.value})}
-                placeholder={t('upstreams.fieldKeyPlaceholder')}
+                // 编辑既有上游时不回填明文（接口只回脱敏值），把当前值显示在占位里，
+                // 「留空 = 不修改」
+                placeholder={editing && editing.has_key
+                  ? t('upstreams.fieldKeyKeep', {masked: editing.api_key_masked})
+                  : t('upstreams.fieldKeyPlaceholder')}
                 maxLength={500}
               />
             </div>

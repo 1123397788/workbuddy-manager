@@ -274,7 +274,12 @@ export interface UpstreamEndpoint {
   id: number | null;
   name: string;
   base_url: string;
-  api_key: string;
+  /**
+   * 上游凭据**不明文回传**（与 api_key / upstash.token 同规矩）：接口只给
+   * 「有没有配」与脱敏值。编辑时留空即不修改。
+   */
+  has_key: boolean;
+  api_key_masked: string;
   note: string;
   enabled: boolean;
   is_default: boolean;

@@ -487,6 +487,7 @@
     "fieldUrlHint": "http://127.0.0.1:7863 の形式。パスや末尾スラッシュは付けないでください",
     "fieldKey": "アップストリームの api_key",
     "fieldKeyPlaceholder": "空欄 = 認証ヘッダーを送らない",
+    "fieldKeyKeep": "空欄 = 変更しない（現在 {masked}）",
     "fieldNote": "メモ",
     "fieldEnabled": "有効",
     "defaultTag": "既定",

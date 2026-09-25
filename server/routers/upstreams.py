@@ -33,11 +33,23 @@ class UpstreamPatch(BaseModel):
 
 
 def _serialize(items: list[dict]) -> list[dict]:
-    """附上「有多少把密钥绑着它」——删除确认框与列表都要显示。"""
+    """对外形状：附上引用计数，并把 `api_key` 换成**脱敏值**（评审补）。
+
+    凭据不明文回前端是本项目的既有约定（`api_key` / `upstash.token` /
+    `device_token` 在其它接口一律 masked + `has_*`）。上游的 `api_key` 与它们同级，
+    而且这一组接口的**列表只要登录**（含只读账号）——明文回传等于把上游凭据发给
+    每一个登录用户。默认上游那行同样要脱敏：它的 key 来自运行中的上游配置。
+
+    编辑时前端不预填，**留空 = 不修改**（PATCH 语义本来就是这样，见 update_upstream）。
+    """
+    from ..services import wb2api
     counts = upstreamsvc.key_counts()
     out = []
     for item in items:
         row = dict(item)
+        raw_key = str(row.pop('api_key', '') or '')
+        row['has_key'] = bool(raw_key)
+        row['api_key_masked'] = wb2api._mask(raw_key) if raw_key else ''
         uid = row.get('id')
         # 默认上游统计的是「没绑定上游的密钥」——它们确实都走默认上游，
         # 这个数字对管理员判断「还有多少把钥匙在用默认池」有用。
@@ -65,7 +77,7 @@ def create_upstream(body: UpstreamIn, request: Request,
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     security.audit(user, 'create_upstream', created['name'],
                    f"id={created['id']}；地址={created['base_url']}；来源 {client_ip(request)}")
-    return created
+    return _serialize([created])[0]
 
 
 @router.patch('/{upstream_id}')
@@ -82,7 +94,7 @@ def update_upstream(upstream_id: int, body: UpstreamPatch, request: Request,
     security.audit(user, 'update_upstream', updated['name'],
                    f"id={updated['id']}；字段={','.join(sorted(patch)) or '无'}；"
                    f'来源 {client_ip(request)}')
-    return updated
+    return _serialize([updated])[0]
 
 
 @router.delete('/{upstream_id}')

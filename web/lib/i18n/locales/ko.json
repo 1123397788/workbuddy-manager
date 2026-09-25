@@ -487,6 +487,7 @@
     "fieldUrlHint": "http://127.0.0.1:7863 형식이며 경로나 끝 슬래시는 넣지 마세요",
     "fieldKey": "업스트림 api_key",
     "fieldKeyPlaceholder": "비우면 인증 헤더를 보내지 않습니다",
+    "fieldKeyKeep": "비우면 변경하지 않습니다 (현재 {masked})",
     "fieldNote": "메모",
     "fieldEnabled": "사용",
     "defaultTag": "기본",
