@@ -275,8 +275,11 @@ def _save_and_finish(result: dict, realm_of_result: str, region_msg: str,
     tencent.drop_state(state)
     _provisioned_states.pop(state, None)
 
-    # 自动重载上游以加载新账号（后台合并执行，不阻塞本次响应）
-    reload.request_restart()
+    # 让上游加载新账号：**先等它的 auths 热加载，超时才重启**（后台执行，
+    # 不阻塞本次响应）。此前无脑重启，而重启期间上游 /status 不可用 —— 前端
+    # 收到成功立刻刷新账号列表，那一刷会一直挂到容器起来，用户看到的是
+    # 「登录成功却要等 20-30 秒」。详见 reload.request_reload_or_restart。
+    reload.request_reload_or_restart(str(result.get('uid') or ''))
 
     return {
         'status': 'success',
