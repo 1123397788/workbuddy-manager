@@ -3,6 +3,7 @@ import {BASE_PATH} from './base-path';
 import {tp} from './i18n';
 import type {Realm} from './realm-context';
 import type {
+  UpstreamEndpoint,
   Account,
   CheckinLogPage,
   CreditExpiry,
@@ -250,6 +251,22 @@ export const playgroundApi = {
 };
 
 /* ── API 密钥 ───────────────────────────────────────── */
+/* ── 多上游（账号池分组，见 server/upstreamsvc.py）────
+ * 密钥绑定上游后，它的请求只走那个上游的账号池；未绑定 = 默认上游。
+ * 写接口是**会话管理员**专属（带着上游 api_key，属配置级凭据）。 */
+export const upstreamsApi = {
+  list: () => get<{items: UpstreamEndpoint[]}>('/api/upstreams'),
+  create: (body: {name: string; base_url: string; api_key?: string; note?: string; enabled?: boolean}) =>
+    post<UpstreamEndpoint>('/api/upstreams', body),
+  update: (
+    id: number,
+    body: Partial<Pick<UpstreamEndpoint, 'name' | 'base_url' | 'api_key' | 'note' | 'enabled'>>,
+  ) => patch<UpstreamEndpoint>(`/api/upstreams/${id}`, body),
+  remove: (id: number) => del<{ok: boolean}>(`/api/upstreams/${id}`),
+  /** 探测该上游是否可达（走它的 /healthz）；失败原因原样返回给界面。 */
+  probe: (id: number) => post<{ok: boolean; message: string}>(`/api/upstreams/${id}/probe`),
+};
+
 export const keyApi = {
   list: () => get<ApiKey[]>('/api/keys'),
   create: (body: Partial<ApiKey>) => post<ApiKey>('/api/keys', body),

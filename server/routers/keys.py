@@ -6,7 +6,7 @@ import ipaddress
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from .. import config, db, keysvc, security
+from .. import config, db, keysvc, security, upstreamsvc
 from ..services import keyexport, keyimport, modelcatalog
 from ..iputil import client_ip
 
@@ -35,6 +35,22 @@ def _check_ip_allowlist(items: list[str] | None) -> None:
                                 detail=_CIDR_HINT.format(bad=s)) from None
 
 
+def _check_upstream(upstream_id: object) -> None:
+    """校验密钥要绑定的上游存在（未绑定 / 默认上游 = None 或 0，直接放行）。
+
+    为什么在这里拦而不是等转发时：绑一个不存在的 id，症状是**每一条请求都 503**
+    （见 upstreamsvc.resolve_for_key 的「不静默回落」），而管理员在界面上看到的是
+    「密钥建好了」。建的时候就报 400，比事后对着 503 排查便宜得多。
+
+    默认上游（id=None）不是数据库里的一行，所以显式放过——它是合法取值。
+    """
+    if upstream_id in (None, '', 0, '0'):
+        return
+    if upstreamsvc.get_upstream(upstream_id) is None:
+        raise HTTPException(status_code=400,
+                            detail=f'选定的上游不存在（id={upstream_id}），它可能已被删除')
+
+
 def _check_name(name: str | None) -> None:
     """名称不能只有空白。
 
@@ -47,6 +63,9 @@ def _check_name(name: str | None) -> None:
 
 class KeyIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
+    # 绑定的上游（多上游 / 分组隔离）：null / 0 / 省略 = 默认上游。
+    # 类型是 int 而不是 str：界面上是下拉选 id，存成整数才能在外键式查询里用。
+    upstream_id: int | None = None
     expires_at: int | None = None
     max_ips: int = 0
     ip_allowlist: list[str] = Field(default_factory=list)
@@ -62,6 +81,8 @@ class KeyIn(BaseModel):
 
 class KeyPatch(BaseModel):
     name: str | None = None
+    # 显式传 null 是**允许**的：把密钥改回默认上游（与 realm 同口径）。
+    upstream_id: int | None = None
     enabled: bool | None = None
     expires_at: int | None = None
     max_ips: int | None = None
@@ -123,6 +144,7 @@ def create_key(body: KeyIn, request: Request,
                user: dict = Depends(security.require_admin)) -> dict:
     _check_name(body.name)
     _check_ip_allowlist(body.ip_allowlist)
+    _check_upstream(body.upstream_id)
     created = keysvc.create_key(
         name=body.name,
         expires_at=body.expires_at,
@@ -132,10 +154,15 @@ def create_key(body: KeyIn, request: Request,
         quota=body.quota,
         realm=body.realm,
         quota_credit=body.quota_credit,
+        upstream_id=body.upstream_id,
     )
     # 密钥是拿额度用的凭证，发放必须留痕（含来源 IP）
+    upstream_name = '默认上游'
+    if created.get('upstream_id'):
+        row = upstreamsvc.get_upstream(created['upstream_id'])
+        upstream_name = row['name'] if row else f"#{created['upstream_id']}（已删除）"
     security.audit(user, 'create_key', str(created.get('name') or ''),
-                   f"id={created.get('id')}；来源 {client_ip(request)}")
+                   f"id={created.get('id')}；上游={upstream_name}；来源 {client_ip(request)}")
     return created
 
 
@@ -147,6 +174,8 @@ def update_key(key_id: int, body: KeyPatch, user: dict = Depends(security.requir
         _check_name(patch['name'])
     if 'ip_allowlist' in patch:
         _check_ip_allowlist(patch['ip_allowlist'])
+    if 'upstream_id' in patch:
+        _check_upstream(patch['upstream_id'])
     updated = keysvc.update_key(key_id, patch)
     if not updated:
         raise HTTPException(status_code=404, detail='密钥不存在')

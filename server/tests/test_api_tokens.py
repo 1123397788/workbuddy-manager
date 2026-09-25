@@ -287,6 +287,11 @@ class WriteEndpointScopeMatrixTest(unittest.TestCase):
         'POST /api/task-logs/clear',
         'POST /api/tokens',
         'POST /api/users',
+        # 多上游（账号池分组）：这几条带着上游的 api_key，而且能改「谁的流量走哪个池」——
+        # 与 /api/settings/upstream 同级（改配置级凭据 + 影响全部账号行为），只对会话开放。
+        'DELETE /api/upstreams/{upstream_id}',
+        'PATCH /api/upstreams/{upstream_id}',
+        'POST /api/upstreams',
     }
     # 写方法但只要求「已登录」——只读令牌也能调。必须逐个有理由。
     ANY_LOGGED_IN = {
