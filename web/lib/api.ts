@@ -20,6 +20,10 @@ import type {
   CreatedApiToken,
   IpAccessLog,
   IpRule,
+  KeyExportResult,
+  KeyImportDetectResult,
+  KeyImportResult,
+  KeyImportStatus,
   Me,
   AuditLogPage,
   ModelCatalog,
@@ -262,6 +266,74 @@ export const keyApi = {
   checkModels: (models: string[], realm: string) =>
     post<{checked: boolean; unknown: string[]; reason?: string}>(
       '/api/keys/check-models', {models, realm}),
+  /**
+   * 把一把**刚创建**的密钥导出为客户端配置片段（cc-switch / ZCode）。
+   *
+   * 必须传明文 `token`：面板只存哈希，库里拿不回明文——这个端点的存在前提
+   * 就是「调用方此刻手里有明文」。因此它只在一次性展示弹窗里被调用，
+   * 密钥列表那行（只有 prefix）导不出来。
+   */
+  exportConfig: (body: {
+    client: 'ccswitch' | 'zcode';
+    token: string;
+    app?: 'claude' | 'codex';
+    baseUrl?: string;
+    providerName?: string;
+    models?: string[];
+    defaultModel?: string;
+  }) => post<KeyExportResult>('/api/keys/export', body),
+  /**
+   * 本机导入的可用状态（**只读探测**，不写任何东西）。
+   *
+   * 要看三件事：面板侧开关是否打开、这次请求是否来自面板所在机器、目标
+   * 客户端是否已安装且未在运行。三者齐了才谈得上「一键导入」——界面据此
+   * 提前把不能用的原因说清楚，用户就不会点完才知道不行。
+   *
+   * 开关关着时返回 200 + `enabled: false`（报错会被当成故障，而这里只是
+   * 一个默认关闭的可选特性）。
+   */
+  importLocalStatus: () => get<KeyImportStatus>('/api/keys/import-local/status'),
+  /**
+   * 把刚创建的密钥**直接写进本机**的 cc-switch / ZCode 配置（真一键）。
+   *
+   * 与 `exportConfig` 同一份参数、同一份配置生成逻辑，区别只在去向：导出把
+   * 片段交给用户，导入替用户落盘。返回体里**没有密钥**。
+   *
+   * 可预期的失败都有明确状态码，`errText` 能直接取到可照做的说明：
+   * 403 = 开关没开或不是本机访问；404 = 本机没装该客户端；
+   * 409 = 客户端正在运行（或探测不到），退出客户端后可重试。
+   */
+  importLocal: (body: {
+    client: 'ccswitch' | 'zcode';
+    token: string;
+    app?: 'claude' | 'codex';
+    baseUrl?: string;
+    providerName?: string;
+    models?: string[];
+    defaultModel?: string;
+    /** 是否把导入的供应商设为当前（cc-switch 置 is_current；ZCode 移到最前） */
+    setCurrent?: boolean;
+    /**
+     * 导入方式。`auto`（默认）= 能走客户端官方深链就走深链；
+     * `deeplink` / `direct` 是给它兜底和排障用的强制值。
+     */
+    mode?: 'auto' | 'deeplink' | 'direct';
+    /**
+     * 直写方式下，客户端正在运行就替用户关掉、写完再拉起来。
+     * 关掉前会先确认定位得到它的可执行文件——关掉却拉不起来比不改更糟。
+     */
+    closeRunning?: boolean;
+  }) => post<KeyImportResult>('/api/keys/import-local', body),
+  /**
+   * 自动检测客户端装在哪（「自动检测」按钮）。
+   *
+   * 为什么需要：安装路径因机器而异——绿色版可能解压在 `E:\cc swich\`，安装版在
+   * `%LOCALAPPDATA%\Programs\…`。检测顺序是"可信度从高到低"：环境变量 →
+   * 运行中的进程 → 注册表里的协议处理器 → 上次结果 → 常见安装位 → 受限扫描。
+   * 命中后会缓存在面板数据目录，之后不用再扫。**只读**，不写用户配置。
+   */
+  importLocalDetect: (client: 'ccswitch' | 'zcode' = 'ccswitch') =>
+    get<KeyImportDetectResult>('/api/keys/import-local/detect', {client}),
 };
 
 /* ── 红包：批量发放带额度的密钥（见 server/redpacket.py）────

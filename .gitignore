@@ -107,3 +107,15 @@ dev/.pack-test
 # 红包抽奖页验收（verify_claim_ui.py）的临时数据与截图
 dev/.claim-ui
 dev/.shots-claim-ui
+# DeviceTokenTest 的临时文件现场（test_outbound_alignment.py，只清文件、目录保留）
+server/tests/_dt_tmp/
+
+# ── 本机部署产物（严禁提交：含账号授权凭据与体积庞大的工具链）─────
+# upstream/ 内有 auths/（真实 CodeBuddy 账号授权）与 config.json（含 api_key）；
+# .tools/ 是本地 Go 工具链（数百 MB）；local-ops/ 是单机启停脚本。
+upstream/
+.tools/
+local-ops/
+LOCAL_DEPLOY_NOTES.md
+start-all.cmd
+stop-all.cmd
