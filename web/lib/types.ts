@@ -264,6 +264,31 @@ export interface ModelCatalog {
   summary: CatalogSummary;
 }
 
+/**
+ * 上游接入点（多上游 / 账号池分组）。
+ *
+ * `id === null && is_default` 那条是**默认上游**：来自环境变量 / 上游 config.json，
+ * 不是数据库记录，所以它没有 id、也不可改不可删。
+ */
+export interface UpstreamEndpoint {
+  id: number | null;
+  name: string;
+  base_url: string;
+  /**
+   * 上游凭据**不明文回传**（与 api_key / upstash.token 同规矩）：接口只给
+   * 「有没有配」与脱敏值。编辑时留空即不修改。
+   */
+  has_key: boolean;
+  api_key_masked: string;
+  note: string;
+  enabled: boolean;
+  is_default: boolean;
+  /** 有多少把密钥绑定在它上面（默认上游那行 = 未绑定上游的密钥数） */
+  bound_keys: number;
+  created_at?: number | null;
+  updated_at?: number | null;
+}
+
 export interface ApiKey {
   id: number;
   name: string;
@@ -291,6 +316,13 @@ export interface ApiKey {
    */
   quota_credit: number;
   used_credit: number;
+  /**
+   * 绑定的上游接入点（多上游 / 分组隔离）；null = 默认上游。
+   *
+   * 为什么是可空 id 而不是「上游名字」：默认上游不是数据库里的一行
+   * （见 server/upstreamsvc.py），空值本身就代表「走默认」这个合法状态。
+   */
+  upstream_id?: number | null;
   /**
    * 来源红包的 id；null = 手工建的。
    *

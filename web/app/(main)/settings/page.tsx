@@ -26,6 +26,7 @@ import {useI18n} from '@/lib/i18n/provider';
 import {t as tGlobal, tp as tpGlobal} from '@/lib/i18n';
 import {RichText} from '@/lib/i18n/rich-text';
 import {settingsApi, upstreamApi, errText} from '@/lib/api';
+import {UpstreamEndpoints} from '@/components/settings/UpstreamEndpoints';
 import {BASE_PATH} from '@/lib/base-path';
 import type {ModelInfo, ModelSource, UpstreamConfig, UserItem} from '@/lib/types';
 import {PageHeader} from '@/components/common/layout/PageHeader';
@@ -1106,6 +1107,10 @@ export default function SettingsPage() {
 
         {/* ═══ 上游配置 ═══ */}
         <TabsContent value="upstream" className="mt-3 space-y-3">
+          {/* 多上游（账号池分组）：密钥绑定上游 = 请求只走那个池，见 server/upstreamsvc.py。
+              放在 config.json 字段之前：它是「本端接了几个上游」的清单，
+              而下面那批字段描述的是**默认上游自身**的配置。 */}
+          <UpstreamEndpoints />
           {upstreamError && (
             <div className="flex items-start gap-2.5 rounded-[20px] border border-amber-500/30 bg-amber-500/10 p-4">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />

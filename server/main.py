@@ -16,7 +16,7 @@ from .iputil import client_ip
 from .routers import (
     accounts, anthropic, auth, gateway, keys, logs, models, playground,
     redpackets, responses, security as security_router, settings, stats,
-    system, tokens,
+    system, tokens, upstreams,
 )
 from .services import accountlog, renew, tasklog, taskrun
 
@@ -145,6 +145,8 @@ app.include_router(security_router.router)
 # 管理面作用域化 API Token（见 docs/api-tokens.md）；接口本身只接受会话鉴权
 app.include_router(tokens.router)
 app.include_router(settings.router)
+# 多上游（账号池分组）：密钥绑定上游 = 请求走那个池，见 upstreamsvc
+app.include_router(upstreams.router)
 app.include_router(system.router)
 app.include_router(models.router)
 app.include_router(playground.router)

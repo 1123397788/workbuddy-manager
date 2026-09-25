@@ -4,9 +4,9 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {KeyRound, Plus, Trash2, Ban, CircleCheck, Pencil, RotateCcw} from 'lucide-react';
 import {useHeartbeat} from '@/lib/use-heartbeat';
 import {notify} from '@/lib/toast';
-import {keyApi, errText} from '@/lib/api';
+import {keyApi, upstreamsApi, errText} from '@/lib/api';
 import {BASE_PATH} from '@/lib/base-path';
-import type {ApiKey, KeyImportResult, KeyImportStatus} from '@/lib/types';
+import type {ApiKey, KeyImportResult, KeyImportStatus, UpstreamEndpoint} from '@/lib/types';
 import {fmtDateTime, fmtNumber} from '@/lib/format';
 import {PageHeader} from '@/components/common/layout/PageHeader';
 import {EmptyState} from '@/components/common/layout/EmptyState';
@@ -62,6 +62,8 @@ interface FormState {
   quotaCredit: string;
   /** 版本归属：'cn' | 'global' | ''（不限制，仅存量密钥） */
   realm: Realm | '';
+  /** 绑定的上游（账号池分组）：null = 默认上游。见 server/upstreamsvc.py */
+  upstream_id: number | null;
 }
 
 const emptyForm: FormState = {
@@ -74,6 +76,7 @@ const emptyForm: FormState = {
   quota: '0',
   quotaCredit: '0',
   realm: 'cn',
+  upstream_id: null,
 };
 
 function toLines(v: string): string[] {
@@ -88,6 +91,8 @@ export default function KeysPage() {
   const {isAdmin} = useAuth();
   const {realm, label: realmName} = useRealm();
   const [keys, setKeys] = useState<ApiKey[]>([]);
+  // 上游列表：新建/编辑弹窗的「上游」下拉需要它；为空时下拉只有「默认上游」一项
+  const [upstreams, setUpstreams] = useState<UpstreamEndpoint[]>([]);
   /**
    * 列表分组。红包一次生成一批、额度零碎，与手工建的混在一起很难看。
    *
@@ -170,7 +175,11 @@ export default function KeysPage() {
   const load = useCallback(async (): Promise<boolean> => {
     setLoading(true);
     try {
-      setKeys(await keyApi.list());
+      // 上游列表与密钥**一起**取：弹窗里的下拉要用它，分开取会出现
+      // 「弹窗已经打开、下拉里却没有选项」（另一路数据还没回来）。
+      const [list, ups] = await Promise.all([keyApi.list(), upstreamsApi.list()]);
+      setKeys(list);
+      setUpstreams(ups.items || []);
       return true;
     } catch (e) {
       notify.err(errText(e));
@@ -194,6 +203,12 @@ export default function KeysPage() {
   // 密钥状态可能被下游调用改变（配额用尽、过期），心跳刷新保持同步
   useHeartbeat(load, 60000);
 
+  /** 列表里显示上游名；找不到（刚被删）时退回 #id —— 不显示空白。 */
+  function upstreamName(id: number): string {
+    const hit = upstreams.find((u) => u.id === id);
+    return hit ? hit.name : `#${id}`;
+  }
+
   function openCreate() {
     setEditing(null);
     // 新建时默认跟随当前所在版本：在哪个版本的界面里建，就是哪个版本的密钥
@@ -215,6 +230,7 @@ export default function KeysPage() {
       quota: String(k.quota ?? 0),
       quotaCredit: String(k.quota_credit ?? 0),
       realm: k.realm || '',
+      upstream_id: k.upstream_id ?? null,
     });
     setUnknownModels(null);
     setFormOpen(true);
@@ -246,6 +262,9 @@ export default function KeysPage() {
         // 弹窗开着的时候用户可能切了版本，若沿用快照，创建出来的密钥版本
         // 会与界面上显示的不一致——那种错是静默的，只有调用时才暴露。
         realm: editing ? form.realm : realm,
+        // 绑定上游（多上游 / 分组隔离）：null = 默认上游，照传——
+        // 后端以它区分「显式改回默认上游」与「本次没提交该字段」（PATCH 语义）。
+        upstream_id: form.upstream_id,
       };
 
       // 新建：填了天数才设过期（0 = 永不过期，不下发 expires_at）
@@ -522,7 +541,18 @@ export default function KeysPage() {
                 (!!k.quota_credit && k.used_credit >= k.quota_credit);
               return (
                 <TableRow key={k.id} className="border-b border-border/40">
-                  <TableCell className="pl-4 text-sm font-medium">{k.name}</TableCell>
+                  <TableCell className="pl-4 text-sm font-medium">
+                    <div>{k.name}</div>
+                    {/* 只标「绑定了上游」的行：默认上游是绝大多数，每行都标等于没标，
+                        有值才说明这把钥匙走的是另一个账号池（见 server/upstreamsvc.py） */}
+                    {k.upstream_id ? (
+                      <div className="mt-0.5">
+                        <Badge variant="secondary" className="rounded-full text-[10px]">
+                          {t('keys.upstreamTag', {name: upstreamName(k.upstream_id)})}
+                        </Badge>
+                      </div>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{k.prefix}…</TableCell>
                   <TableCell>
                     {!k.enabled ? (
@@ -834,6 +864,34 @@ export default function KeysPage() {
                     </span>
                   </div>
                 )}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] text-muted-foreground">{t('keys.upstreamLabel')}</Label>
+                {/* 多上游（分组隔离）：选了某个上游，这把密钥的请求就只走那个上游的
+                    账号池。默认上游 = 不绑定，也就是升级前的行为。 */}
+                <Select
+                  value={form.upstream_id == null ? '__default__' : String(form.upstream_id)}
+                  onValueChange={(v) =>
+                    setForm({...form, upstream_id: v === '__default__' ? null : Number(v)})
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">{t('keys.upstreamDefault')}</SelectItem>
+                    {upstreams
+                      .filter((u) => !u.is_default && u.id != null)
+                      .map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.enabled ? u.name : `${u.name}${t('keys.upstreamDisabledSuffix')}`}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  {t('keys.upstreamHint')}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] text-muted-foreground">{t('keys.modelWhitelist')}</Label>
