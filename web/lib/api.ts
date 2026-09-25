@@ -1,6 +1,6 @@
 import axios, {AxiosError} from 'axios';
 import {BASE_PATH} from './base-path';
-import {tp} from './i18n';
+import {t, tp} from './i18n';
 import type {Realm} from './realm-context';
 import type {
   Account,
@@ -62,12 +62,25 @@ export const http = axios.create({
  * 后端的报错是中文（服务端不做多语言，见 README 的多语言说明），这里过一遍
  * 短语表：命中已收录的后端文案就换成当前语言，没收录的原样展示——既不需要
  * 后端改造，也不会因为漏收录而显示成键名或空白。
+ *
+ * 403 **不做统一改写**。这个状态码在本项目里有四种互不相干的含义：角色不够
+ * （`require_admin`）、接口只收会话不收 API Token（`require_session_admin`）、
+ * 本机导入的开关没开、以及调用方不是面板所在的机器。后两种的原文是**可照做的
+ * 操作说明**（去哪儿开开关、改用「导出配置」），一律改写成「权限不足」会把
+ * 用户唯一能照着做的那句话抹掉。所以只要后端给了文案，就永远优先用它。
+ *
+ * 兜底只在后端**没给**文案时生效。那种情况下原本会露出 axios 自己的英文
+ * message（"Request failed with status code 403"）——界面明明是多语言的，
+ * 偏偏在这条路径上漏出英文，而且对用户没有任何指导意义。
  */
 export function errText(e: unknown): string {
   const ax = e as AxiosError<{detail?: string; error?: string}>;
   const d = ax?.response?.data;
-  const raw = (typeof d === 'string' ? d : d?.detail || d?.error) || ax?.message || '';
-  return raw ? tp(raw) : tp('请求失败');
+  const raw = (typeof d === 'string' ? d : d?.detail || d?.error) || '';
+  if (raw) return tp(raw);
+  if (ax?.response?.status === 403) return t('error.forbidden');
+  const fallback = ax?.message || '';
+  return fallback ? tp(fallback) : tp('请求失败');
 }
 
 http.interceptors.response.use(

@@ -26,11 +26,11 @@ import {useI18n} from '@/lib/i18n/provider';
 import {t as tGlobal, tp as tpGlobal} from '@/lib/i18n';
 import {RichText} from '@/lib/i18n/rich-text';
 import {settingsApi, upstreamApi, errText} from '@/lib/api';
-import {BASE_PATH} from '@/lib/base-path';
 import type {ModelInfo, ModelSource, UpstreamConfig, UserItem} from '@/lib/types';
 import {PageHeader} from '@/components/common/layout/PageHeader';
 import {EmptyState} from '@/components/common/layout/EmptyState';
 import {ConfirmDialog} from '@/components/common/layout/ConfirmDialog';
+import {ResetPasswordDialog} from '@/components/common/settings/ResetPasswordDialog';
 import {useAuth} from '@/lib/auth-context';
 import {UpdatePanel} from '@/components/common/settings/UpdatePanel';
 import {TokensPanel} from '@/components/common/settings/TokensPanel';
@@ -1865,34 +1865,17 @@ export default function SettingsPage() {
                     {isAdmin && (
                       <TableCell className="pr-4 text-right">
                         <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 rounded-full text-xs"
-                            onClick={async () => {
-                              const pwd = window.prompt(
-                                t('settings.resetPasswordPrompt', {name: u.username}));
-                              if (!pwd) return;
-                              try {
-                                const r = await settingsApi.updateUser(u.username, {password: pwd});
-                                // 改密码会吊销该用户既有会话。若改的是自己，
-                                // 当前登录态也随之失效——必须明确告知要去重新登录，
-                                // 否则用户会以为「界面卡住了」（下次请求就是 401）。
-                                if (r?.relogin_required) {
-                                  notify.ok(t('settings.passwordUpdated'), t('settings.passwordRelogin'));
-                                  window.setTimeout(() => {
-                                    window.location.href = `${BASE_PATH}/login`;
-                                  }, 1800);
-                                  return;
-                                }
-                                notify.ok(t('settings.passwordUpdated'), t('settings.passwordOthersRevoked'));
-                              } catch (e) {
-                                notify.err(errText(e));
-                              }
-                            }}
-                          >
-                            {t('settings.resetPassword')}
-                          </Button>
+                          {/* 重置密码走与「删除用户」同一套对话框（原来这里是
+                              window.prompt，同一行里两种风格）。校验、清空、
+                              改完自己要不要重新登录等逻辑都在组件里。 */}
+                          <ResetPasswordDialog
+                            username={u.username}
+                            trigger={
+                              <Button variant="ghost" size="sm" className="h-7 rounded-full text-xs">
+                                {t('settings.resetPassword')}
+                              </Button>
+                            }
+                          />
                           <ConfirmDialog
                             title={t('settings.deleteUserTitle', {name: u.username})}
                             description={t('settings.deleteUserDesc')}

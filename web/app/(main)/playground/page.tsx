@@ -8,8 +8,6 @@ import {
   Info,
   Loader2,
   RefreshCw,
-  ThumbsDown,
-  ThumbsUp,
   User as UserIcon,
 } from 'lucide-react';
 
@@ -334,24 +332,11 @@ export default function PlaygroundPage() {
                               title={t('playground.copyAnswer')}
                               className="h-6 w-6"
                             />
-                            <button
-                              type="button"
-                              title={t('playground.goodAnswer')}
-                              className="transition-colors hover:text-foreground"
-                              onClick={() => notify.ok(t('playground.feedbackRecorded'))}
-                            >
-                              <ThumbsUp className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              title={t('playground.badAnswer')}
-                              className="transition-colors hover:text-foreground"
-                              onClick={() =>
-                                notify.info(t('playground.feedbackRecorded'), t('playground.feedbackDetail'))
-                              }
-                            >
-                              <ThumbsDown className="h-3 w-3" />
-                            </button>
+                            {/* 这里**故意没有**点赞 / 点踩按钮：它们原先只弹一句
+                                「已记录反馈」，不写任何数据——看起来能用其实没用，
+                                比没有更糟（用户会以为自己真的反馈过了，于是不再
+                                另想办法提意见）。产品上也决定不做这个功能，所以
+                                直接删掉，不留占位。 */}
                             {typeof m.credit === 'number' && (
                               <span
                                 className="inline-flex items-center gap-1 text-[10px] tabular-nums"

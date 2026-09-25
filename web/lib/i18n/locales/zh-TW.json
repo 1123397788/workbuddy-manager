@@ -29,6 +29,11 @@
     "loadFailedHint": "請檢查網路連線或後端服務是否正常，然後重試。",
     "retry": "重試"
   },
+  "error": {
+    "crashTitle": "這個頁面發生錯誤",
+    "crashHint": "可以先點「重試」；如果反覆出現，請把瀏覽器主控台裡的錯誤一併回報——只描述現象很難定位。",
+    "forbidden": "權限不足：目前帳號無法執行這個操作"
+  },
   "nav": {
     "dashboard": "儀表板",
     "accounts": "帳號",
@@ -578,7 +583,9 @@
     "reasonTooManyIps": "密鑰綁定的 IP 數超出上限",
     "reasonRealmMismatch": "模型版本與密鑰限定不符",
     "reasonModelNotAllowed": "模型不在密鑰白名單內",
-    "accessLogScope": "僅記錄被攔截的請求；放行的呼叫見「請求日誌」頁"
+    "accessLogScope": "僅記錄被攔截的請求；放行的呼叫見「請求日誌」頁",
+    "deleteRuleTitle": "刪除這條 IP 規則？",
+    "deleteRuleDesc": "刪除後立即生效：該網段不再受這條規則約束（放行或攔截都一併取消）。"
   },
   "models": {
     "title": "模型中心",
@@ -651,10 +658,6 @@
     "currentModel": "目前模型",
     "supportsEfforts": "，支援推理檔位 {efforts}",
     "copyAnswer": "複製回答",
-    "goodAnswer": "回答不錯",
-    "badAnswer": "回答有問題",
-    "feedbackRecorded": "已記錄回饋",
-    "feedbackDetail": "可到設定頁的回饋入口提交詳情",
     "creditTitle": "本次呼叫的實際扣費（上游 usage.credit）",
     "modelsAvailable": "共 {n} 個可用模型",
     "noModels": "未取得模型，請檢查「模型中心」",
@@ -1024,7 +1027,6 @@
     "usersRequired": "請填寫使用者名稱與密碼",
     "usersCreated": "使用者已建立",
     "resetPassword": "重設密碼",
-    "resetPasswordPrompt": "為「{name}」設定新密碼（至少 8 碼）：",
     "passwordUpdated": "密碼已更新",
     "passwordRelogin": "目前登入狀態已失效，請用新密碼重新登入",
     "passwordOthersRevoked": "該使用者的其他登入狀態已全部失效",
@@ -1088,7 +1090,10 @@
     "tokensCopied": "已複製",
     "tokensEnable": "啟用",
     "tokensDisable": "停用",
-    "tokensSessionOnlyHint": "更新、清除日誌、使用者管理等高風險介面仍需工作階段登入，權杖無法呼叫。"
+    "tokensSessionOnlyHint": "更新、清除日誌、使用者管理等高風險介面仍需工作階段登入，權杖無法呼叫。",
+    "resetPasswordTitle": "重設「{name}」的密碼",
+    "resetPasswordDesc": "設定後該使用者既有的登入狀態會全部失效；至少 8 位。",
+    "newPasswordPlaceholder": "新密碼（至少 8 位）"
   },
   "phrases": {
     "请求失败": "請求失敗",
@@ -1293,7 +1298,11 @@
     "启用账号管理接口": "啟用帳號管理介面",
     "让「临时停用」只摘除转发流量（签到 / 保活照常、积分与凭证保持活跃）。不开启时停用会回退为「改文件名」，账号会完全退出账号池、任务一并停止。**需重启上游容器生效**；且上游要求 api_key 非空，否则拒绝启动": "讓「暫時停用」只摘除轉發流量（簽到 / 保活照常、積分與憑證保持活躍）。不開啟時停用會回退為「改檔名」，帳號會完全退出帳號池、任務一併停止。**需重啟上游容器生效**；且上游要求 api_key 非空，否則拒絕啟動",
     "仅对**旧版**上游生效：上游 9d1a21b 起已移除该配置、不再限制请求体大小。本网关自身的入站上限由环境变量 WB_GATEWAY_MAX_BODY_MB 控制（默认 32 MB）": "僅對**舊版**上游生效：上游 9d1a21b 起已移除該設定、不再限制請求體大小。本閘道自身的入站上限由環境變數 WB_GATEWAY_MAX_BODY_MB 控制（預設 32 MB）",
-    "请求体上限（旧版上游）": "請求體上限（舊版上游）"
+    "请求体上限（旧版上游）": "請求體上限（舊版上游）",
+    "刷新积分需要管理员权限": "重新整理積分需要管理員權限",
+    "本机导入未启用。它会把密钥直接写进本机的 cc-switch / ZCode 配置，故默认关闭：请在面板的 .env 里设 WB_LOCAL_IMPORT=1 后重启面板。": "本機匯入未啟用。它會把金鑰直接寫進本機的 cc-switch / ZCode 設定，因此預設關閉：請在面板的 .env 裡設定 WB_LOCAL_IMPORT=1 後重新啟動面板。",
+    "本机导入只允许从面板所在的机器访问（请用 http://127.0.0.1:<面板端口> 打开面板）。远程部署请改用「导出配置」手动导入——在服务器上写 cc-switch / ZCode 的配置不会影响你本机的客户端。": "本機匯入只允許從面板所在的機器存取（請用 http://127.0.0.1:<面板連接埠> 開啟面板）。遠端部署請改用「匯出設定」手動匯入——在伺服器上寫 cc-switch / ZCode 的設定不會影響你本機的用戶端。",
+    "该接口不接受 API Token，请用会话登录后操作": "該介面不接受 API Token，請以工作階段登入後再操作"
   },
   "redPacket": {
     "title": "紅包",
